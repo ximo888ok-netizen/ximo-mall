@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ximo Mall MCP Server</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* ================================================================
+       CSS Variables & Reset
+       ================================================================ */
+    :root {
+      --bg-primary: #07080c;
+      --bg-secondary: #0d0f16;
+      --bg-surface: #12141d;
+      --bg-surface-hover: #181b27;
+      --bg-elevated: #1a1d2a;
+      --border: #1e2235;
+      --border-focus: #f5c518;
+      --text: #e8e6e3;
+      --text-secondary: #8b8d97;
+      --text-muted: #5a5c66;
+      --accent: #f5c518;
+      --accent-dim: #f5c51833;
+      --accent-glow: #f5c51822;
+      --success: #34d399;
+      --success-dim: #34d39922;
+      --error: #f87171;
+      --error-dim: #f8717122;
+      --info: #60a5fa;
+      --info-dim: #60a5fa22;
+      --warning: #fbbf24;
+      --warning-dim: #fbbf2422;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --radius-xl: 20px;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,.3);
+      --shadow-md: 0 4px 16px rgba(0,0,0,.4);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,.5);
+      --shadow-glow: 0 0 30px var(--accent-glow);
+      --font-display: 'Outfit', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+      --transition: 180ms cubic-bezier(.4,0,.2,1);
+    }
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html { font-size: 15px; -webkit-font-smoothing: antialiased; }
+    body {
+      font-family: var(--font-display);
+      background: var(--bg-primary);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    ::selection { background: var(--accent-dim); color: var(--accent); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+    /* ================================================================
+       Background Noise Texture
+       ================================================================ */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ================================================================
+       Layout
+       ================================================================ */
+    .app { display: flex; height: 100vh; }
+
+    /* ---- Sidebar ---- */
+    .sidebar {
+      width: 300px;
+      min-width: 300px;
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-header {
+      padding: 1.25rem 1.25rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .sidebar-header .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.75rem;
+    }
+    .sidebar-header .logo-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, var(--accent), #e6a817);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      box-shadow: var(--shadow-glow);
+    }
+    .sidebar-header .logo-text {
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -0.02em;
+    }
+    .sidebar-header .logo-text span { color: var(--accent); }
+    .sidebar-header .version {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      background: var(--bg-surface);
+      padding: 0.15rem 0.5rem;
+      border-radius: 999px;
+      display: inline-block;
+    }
+
+    /* Search */
+    .search-box {
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .search-input {
+      width: 100%;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 0.55rem 0.75rem 0.55rem 2.2rem;
+      color: var(--text);
+      font-family: var(--font-display);
+      font-size: 0.82rem;
+      outline: none;
+      transition: border-color var(--transition);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='%235a5c66' viewBox='0 0 24 24'%3E%3Cpath d='M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z' stroke='%235a5c66' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 0.65rem center;
+    }
+    .search-input:focus { border-color: var(--accent); }
+    .search-input::placeholder { color: var(--text-muted); }
+
+    /* Tool categories */
+    .tool-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 0.5rem 0;
+    }
+    .category {
+      margin-bottom: 0.25rem;
+    }
+    .category-header {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1.25rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      cursor: pointer;
+      user-select: none;
+      transition: color var(--transition);
+    }
+    .category-header:hover { color: var(--text-secondary); }
+    .category-header .chevron {
+      transition: transform var(--transition);
+      font-size: 0.6rem;
+    }
+    .category.collapsed .chevron { transform: rotate(-90deg); }
+    .category.collapsed .category-items { display: none; }
+    .category-header .count {
+      margin-left: auto;
+      font-family: var(--font-mono);
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      background: var(--bg-surface);
+      padding: 0.1rem 0.4rem;
+      border-radius: 999px;
+    }
+
+    .tool-item {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      padding: 0.55rem 1.25rem 0.55rem 1.75rem;
+      cursor: pointer;
+      transition: all var(--transition);
+      border-left: 2px solid transparent;
+      font-size: 0.82rem;
+      color: var(--text-secondary);
+    }
+    .tool-item:hover {
+      background: var(--bg-surface-hover);
+      color: var(--text);
+    }
+    .tool-item.active {
+      background: var(--bg-surface);
+      color: var(--accent);
+      border-left-color: var(--accent);
+    }
+    .tool-item .method-badge {
+      font-family: var(--font-mono);
+      font-size: 0.6rem;
+      font-weight: 600;
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+      min-width: 32px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .method-badge.get { background: var(--success-dim); color: var(--success); }
+    .method-badge.post { background: var(--info-dim); color: var(--info); }
+    .method-badge.patch { background: var(--warning-dim); color: var(--warning); }
+    .method-badge.delete { background: var(--error-dim); color: var(--error); }
+    .tool-item .tool-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* ---- Main Panel ---- */
+    .main-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Top bar */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-secondary);
+    }
+    .top-bar .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.82rem;
+    }
+    .breadcrumb .sep { color: var(--text-muted); }
+    .breadcrumb .current { color: var(--accent); font-weight: 500; }
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--success);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .status-dot.disconnected { background: var(--error); animation: none; }
+
+    /* Content area */
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 1.25rem 1.5rem;
+      overflow-y: auto;
+      gap: 1rem;
+    }
+
+    /* Tool detail panel */
+    .tool-detail {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+      animation: fadeIn 0.2s ease;
+    }
+    .tool-detail.visible { display: flex; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .tool-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .tool-description {
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+      line-height: 1.5;
+    }
+
+    /* Panels */
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+    }
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 1rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-elevated);
+    }
+    .panel-header .label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+    .panel-body { padding: 0; }
+
+    /* Request editor */
+    .request-editor {
+      width: 100%;
+      min-height: 180px;
+      max-height: 400px;
+      background: transparent;
+      border: none;
+      padding: 1rem;
+      color: var(--accent);
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      line-height: 1.6;
+      resize: vertical;
+      outline: none;
+      tab-size: 2;
+    }
+
+    /* Actions bar */
+    .actions-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn {
+      font-family: var(--font-display);
+      font-size: 0.82rem;
+      font-weight: 500;
+      padding: 0.55rem 1.1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--bg-surface);
+      color: var(--text);
+      cursor: pointer;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .btn:hover { background: var(--bg-surface-hover); border-color: var(--text-muted); }
+    .btn.primary {
+      background: var(--accent);
+      color: #000;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    .btn.primary:hover { background: #e6b015; box-shadow: var(--shadow-glow); }
+    .btn.primary:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+    .btn .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      display: none;
+    }
+    .btn.loading .spinner { display: block; }
+    .btn.loading .btn-text { opacity: 0.6; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Response area */
+    .response-body {
+      padding: 1rem;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 500px;
+      overflow-y: auto;
+      color: var(--text-secondary);
+    }
+    .response-body.success { color: var(--success); }
+    .response-body.error { color: var(--error); }
+    .response-body .json-key { color: var(--info); }
+    .response-body .json-string { color: var(--success); }
+    .response-body .json-number { color: var(--accent); }
+    .response-body .json-boolean { color: var(--warning); }
+    .response-body .json-null { color: var(--text-muted); }
+
+    /* Welcome screen */
+    .welcome {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 1.5rem;
+      animation: fadeIn 0.3s ease;
+    }
+    .welcome-icon {
+      width: 80px;
+      height: 80px;
+      background: linear-gradient(135deg, var(--accent), #e6a817);
+      border-radius: var(--radius-xl);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+      box-shadow: var(--shadow-glow), var(--shadow-lg);
+    }
+    .welcome h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .welcome p {
+      color: var(--text-secondary);
+      max-width: 480px;
+      line-height: 1.6;
+      font-size: 0.9rem;
+    }
+    .welcome .stats-row {
+      display: flex;
+      gap: 2rem;
+      margin-top: 0.5rem;
+    }
+    .stat-item {
+      text-align: center;
+    }
+    .stat-item .stat-num {
+      font-family: var(--font-mono);
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+    .stat-item .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* Quick actions */
+    .quick-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .quick-action {
+      font-family: var(--font-display);
+      font-size: 0.78rem;
+      padding: 0.45rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .quick-action:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    /* Log panel */
+    .log-panel {
+      border-top: 1px solid var(--border);
+      background: var(--bg-secondary);
+      max-height: 160px;
+      overflow-y: auto;
+      padding: 0.5rem 1.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
+    .log-entry {
+      padding: 0.15rem 0;
+      display: flex;
+      gap: 0.75rem;
+    }
+    .log-entry .log-time { color: var(--text-muted); flex-shrink: 0; }
+    .log-entry.info .log-msg { color: var(--info); }
+    .log-entry.success .log-msg { color: var(--success); }
+    .log-entry.error .log-msg { color: var(--error); }
+    .log-entry.warn .log-msg { color: var(--warning); }
+
+    /* Schema table */
+    .schema-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .schema-table th,
+    .schema-table td {
+      padding: 0.5rem 1rem;
+      text-align: left;
+      font-size: 0.8rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .schema-table th {
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: var(--bg-elevated);
+    }
+    .schema-table td:first-child {
+      font-family: var(--font-mono);
+      color: var(--info);
+      font-size: 0.78rem;
+    }
+    .schema-table .type-badge {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      color: var(--accent);
+      background: var(--accent-dim);
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+    }
+    .schema-table .required {
+      color: var(--error);
+      font-size: 0.68rem;
+      font-weight: 600;
+    }
+    .schema-table .optional {
+      color: var(--text-muted);
+      font-size: 0.68rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .sidebar { width: 260px; min-width: 260px; }
+      .content { padding: 1rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- ============================================================
+         Sidebar
+         ============================================================ -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <div class="logo-icon">🍌</div>
+          <div class="logo-text"><span>Ximo Mall</span> MCP</div>
+        </div>
+        <span class="version">v1.0.0 · 47 tools</span>
+      </div>
+      <div class="search-box">
+        <input type="text" class="search-input" id="searchInput" placeholder="搜索工具..." />
+      </div>
+      <div class="tool-list" id="toolList"></div>
+    </aside>
+
+    <!-- ============================================================
+         Main Panel
+         ============================================================ -->
+    <div class="main-panel">
+      <div class="top-bar">
+        <div class="breadcrumb">
+          <span>MCP Server</span>
+          <span class="sep">/</span>
+          <span class="current" id="breadcrumbTool">选择一个工具</span>
+        </div>
+        <div class="status-indicator">
+          <span class="status-dot" id="statusDot"></span>
+          <span id="statusText">就绪</span>
+        </div>
+      </div>
+
+      <div class="content" id="contentArea">
+        <!-- Welcome screen (default) -->
+        <div class="welcome" id="welcomeScreen">
+          <div class="welcome-icon">🍌</div>
+          <h2>Ximo Mall MCP Server</h2>
+          <p>AI 驱动的电商详情页生成平台 MCP 接口。<br/>从左侧选择一个工具开始调用，或使用快速操作。</p>
+          <div class="stats-row">
+            <div class="stat-item">
+              <div class="stat-num" id="statTools">47</div>
+              <div class="stat-label">工具总数</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-num" id="statCategories">10</div>
+              <div class="stat-label">功能分类</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-num" id="statCalls">0</div>
+              <div class="stat-label">已调用</div>
+            </div>
+          </div>
+          <div class="quick-actions">
+            <button class="quick-action" onclick="selectToolByName('列出所有项目')">📋 列出项目</button>
+            <button class="quick-action" onclick="selectToolByName('列出AI提供商')">🤖 AI 提供商</button>
+              <button class="quick-action" onclick="selectToolByName('获取知识库统计')">📊 图书馆统计</button>
+            <button class="quick-action" onclick="selectToolByName('获取API用量统计')">📈 API 用量</button>
+              <button class="quick-action" onclick="selectToolByName('列出学习会话')">🧠 学习会话</button>
+            <button class="quick-action" onclick="loadToolsList()">🔧 列出所有工具</button>
+          </div>
+        </div>
+
+        <!-- Tool detail panel (hidden by default) -->
+        <div class="tool-detail" id="toolDetail">
+          <div>
+            <div class="tool-title" id="toolTitle"></div>
+            <div class="tool-description" id="toolDesc"></div>
+          </div>
+
+          <!-- Parameters schema -->
+          <div class="panel" id="paramsPanel" style="display:none">
+            <div class="panel-header">
+              <span class="label">参数</span>
+            </div>
+            <div class="panel-body">
+              <table class="schema-table" id="schemaTable">
+                <thead>
+                  <tr>
+                    <th>参数名</th>
+                    <th>类型</th>
+                    <th>必填</th>
+                    <th>说明</th>
+                  </tr>
+                </thead>
+                <tbody id="schemaBody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Request editor -->
+          <div class="panel">
+            <div class="panel-header">
+              <span class="label">请求</span>
+              <div class="actions-bar">
+                <button class="btn" onclick="resetParams()">重置</button>
+                <button class="btn primary" id="sendBtn" onclick="callTool()">
+                  <span class="spinner"></span>
+                  <span class="btn-text">▶ 调用工具</span>
+                </button>
+              </div>
+            </div>
+            <div class="panel-body">
+              <textarea class="request-editor" id="requestEditor" spellcheck="false"></textarea>
+            </div>
+          </div>
+
+          <!-- Response -->
+          <div class="panel" id="responsePanel" style="display:none">
+            <div class="panel-header">
+              <span class="label">响应 <span id="responseStatus"></span></span>
+              <span id="responseTime" style="font-size:0.7rem;color:var(--text-muted);font-family:var(--font-mono)"></span>
+            </div>
+            <div class="panel-body">
+              <div class="response-body" id="responseBody"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Log panel -->
+      <div class="log-panel" id="logPanel"></div>
+    </div>
+  </div>
+
+  <script>
+    /* ================================================================
+       State
+       ================================================================ */
+    const endpoint = '/mcp';
+    let sessionId = null;
+    let currentTool = null;
+    let callCount = 0;
+    let toolsCache = [];
+
+    /* ================================================================
+       Tool Definitions (comprehensive list)
+       ================================================================ */
+    const TOOL_CATEGORIES = {
+      '项目管理': {
+        icon: '📁',
+        tools: [
+          { name: '列出所有项目', label: '列出所有项目', method: 'GET', params: {} },
+          { name: '创建新项目', label: '创建新项目', method: 'POST', params: { name: { type: 'string', required: true, desc: '项目名称' }, platform: { type: 'string', required: true, desc: '目标平台' }, style: { type: 'string', required: true, desc: '视觉风格' }, description: { type: 'string', required: false, desc: '项目描述' } } },
+          { name: '获取项目详情', label: '获取项目详情', method: 'GET', params: { id: { type: 'string', required: true, desc: '项目 ID' } } },
+          { name: '更新项目', label: '更新项目', method: 'PATCH', params: { id: { type: 'string', required: true, desc: '项目 ID' }, data: { type: 'object', required: true, desc: '更新字段' } } },
+          { name: '删除项目', label: '删除项目', method: 'DELETE', params: { id: { type: 'string', required: true, desc: '项目 ID' } } },
+        ]
+      },
+      '商品分析': {
+        icon: '🔍',
+        tools: [
+          { name: 'AI分析商品', label: 'AI分析商品', method: 'POST', params: { id: { type: 'string', required: true, desc: '项目 ID' }, modelId: { type: 'string', required: false, desc: '模型 ID' } } },
+          { name: '更新分析结果', label: '更新分析结果', method: 'PATCH', params: { id: { type: 'string', required: true, desc: '项目 ID' }, normalizedResult: { type: 'object', required: true, desc: '标准化分析结果' } } },
+        ]
+      },
+      'AI 规划': {
+        icon: '📐',
+        tools: [
+          { name: 'AI规划详情页', label: 'AI规划详情页', method: 'POST', params: { id: { type: 'string', required: true, desc: '项目 ID' }, options: { type: 'object', required: false, desc: '规划选项' } } },
+          { name: '初始化自定义模块', label: '初始化自定义模块', method: 'POST', params: { id: { type: 'string', required: true, desc: '项目 ID' } } },
+        ]
+      },
+      '模块管理': {
+        icon: '🧩',
+        tools: [
+          { name: '列出所有模块', label: '列出所有模块', method: 'GET', params: { projectId: { type: 'string', required: true, desc: '项目 ID' } } },
+          { name: '创建模块', label: '创建模块', method: 'POST', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, data: { type: 'object', required: true, desc: '模块数据' } } },
+          { name: '更新模块', label: '更新模块', method: 'PATCH', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, sectionId: { type: 'string', required: true, desc: '模块 ID' }, data: { type: 'object', required: true, desc: '更新字段' } } },
+          { name: '删除模块', label: '删除模块', method: 'DELETE', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, sectionId: { type: 'string', required: true, desc: '模块 ID' } } },
+          { name: '排序模块', label: '排序模块', method: 'POST', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, orderedSectionIds: { type: 'array', required: true, desc: '排序后的模块 ID 数组' } } },
+        ]
+      },
+      '图片生成': {
+        icon: '🎨',
+        tools: [
+          { name: '生成模块图片', label: '生成模块图片', method: 'POST', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, sectionId: { type: 'string', required: true, desc: '模块 ID' }, modelId: { type: 'string', required: false, desc: '模型 ID' }, referenceAssetIds: { type: 'array', required: false, desc: '参考素材 ID' } } },
+          { name: '重新生成图片', label: '重新生成图片', method: 'POST', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, sectionId: { type: 'string', required: true, desc: '模块 ID' }, options: { type: 'object', required: false, desc: '生成选项' } } },
+          { name: '精修图片', label: '精修图片', method: 'POST', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, sectionId: { type: 'string', required: true, desc: '模块 ID' }, options: { type: 'object', required: true, desc: '精修选项' } } },
+          { name: '编辑图片', label: '编辑图片', method: 'POST', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, sectionId: { type: 'string', required: true, desc: '模块 ID' }, options: { type: 'object', required: false, desc: '编辑选项' } } },
+          { name: '图片微调', label: '图片微调', method: 'POST', params: { data: { type: 'object', required: true, desc: '微调参数' } } },
+        ]
+      },
+      '版本管理': {
+        icon: '📑',
+        tools: [
+          { name: '列出版本历史', label: '列出版本历史', method: 'GET', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, sectionId: { type: 'string', required: true, desc: '模块 ID' } } },
+          { name: '激活版本', label: '激活版本', method: 'PATCH', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, sectionId: { type: 'string', required: true, desc: '模块 ID' }, versionId: { type: 'string', required: true, desc: '版本 ID' } } },
+        ]
+      },
+      '素材管理': {
+        icon: '🖼️',
+        tools: [
+          { name: '上传素材', label: '上传素材', method: 'POST', params: { projectId: { type: 'string', required: true, desc: '项目 ID' }, data: { type: 'object', required: true, desc: '素材数据' } } },
+          { name: '删除素材', label: '删除素材', method: 'DELETE', params: { id: { type: 'string', required: true, desc: '素材 ID' } } },
+          { name: '设为主图', label: '设为主图', method: 'PATCH', params: { id: { type: 'string', required: true, desc: '素材 ID' } } },
+          { name: '导出项目JSON', label: '导出项目JSON', method: 'GET', params: { id: { type: 'string', required: true, desc: '项目 ID' } } },
+          { name: '导出项目图片包', label: '导出项目图片包', method: 'GET', params: { id: { type: 'string', required: true, desc: '项目 ID' } } },
+        ]
+      },
+      '图片知识库': {
+        icon: '📚',
+        tools: [
+          { name: '列出知识库图片', label: '列出知识库图片', method: 'GET', params: { query: { type: 'string', required: false, desc: '搜索关键词' }, categoryId: { type: 'string', required: false, desc: '分类 ID' }, page: { type: 'number', required: false, desc: '页码' }, pageSize: { type: 'number', required: false, desc: '每页数量' } } },
+          { name: '获取知识库图片详情', label: '获取知识库图片详情', method: 'GET', params: { id: { type: 'string', required: true, desc: '图片 ID' } } },
+          { name: '更新知识库图片', label: '更新知识库图片', method: 'PATCH', params: { id: { type: 'string', required: true, desc: '图片 ID' }, data: { type: 'object', required: true, desc: '更新字段' } } },
+          { name: '删除知识库图片', label: '删除知识库图片', method: 'DELETE', params: { id: { type: 'string', required: true, desc: '图片 ID' } } },
+          { name: '获取知识库统计', label: '获取知识库统计', method: 'GET', params: {} },
+          { name: '列出图片分类', label: '列出图片分类', method: 'GET', params: {} },
+          { name: '创建图片分类', label: '创建图片分类', method: 'POST', params: { data: { type: 'object', required: true, desc: '分类数据' } } },
+          { name: '更新图片分类', label: '更新图片分类', method: 'PATCH', params: { id: { type: 'string', required: true, desc: '分类 ID' }, data: { type: 'object', required: true, desc: '更新字段' } } },
+          { name: '删除图片分类', label: '删除图片分类', method: 'DELETE', params: { id: { type: 'string', required: true, desc: '分类 ID' } } },
+          { name: '列出图片标签', label: '列出图片标签', method: 'GET', params: {} },
+          { name: '创建图片标签', label: '创建图片标签', method: 'POST', params: { data: { type: 'object', required: true, desc: '标签数据' } } },
+          { name: '更新图片标签', label: '更新图片标签', method: 'PATCH', params: { id: { type: 'string', required: true, desc: '标签 ID' }, data: { type: 'object', required: true, desc: '更新字段' } } },
+          { name: '删除图片标签', label: '删除图片标签', method: 'DELETE', params: { id: { type: 'string', required: true, desc: '标签 ID' } } },
+          { name: '列出图片合集', label: '列出图片合集', method: 'GET', params: {} },
+          { name: '创建图片合集', label: '创建图片合集', method: 'POST', params: { data: { type: 'object', required: true, desc: '合集数据' } } },
+          { name: '获取图片合集详情', label: '获取图片合集详情', method: 'GET', params: { id: { type: 'string', required: true, desc: '合集 ID' } } },
+          { name: '更新图片合集', label: '更新图片合集', method: 'PATCH', params: { id: { type: 'string', required: true, desc: '合集 ID' }, data: { type: 'object', required: true, desc: '更新字段' }, action: { type: 'string', required: false, desc: '操作类型' } } },
+          { name: '删除图片合集', label: '删除图片合集', method: 'DELETE', params: { id: { type: 'string', required: true, desc: '合集 ID' } } },
+        ]
+      },
+      'AI 学习': {
+        icon: '🧠',
+        tools: [
+          { name: '列出学习会话', label: '列出学习会话', method: 'GET', params: { sessionId: { type: 'string', required: false, desc: '会话 ID' }, stats: { type: 'boolean', required: false, desc: '返回统计' } } },
+          { name: '创建学习会话', label: '创建学习会话', method: 'POST', params: { name: { type: 'string', required: true, desc: '会话名称' }, description: { type: 'string', required: false, desc: '描述' }, autoApply: { type: 'boolean', required: false, desc: '自动应用' } } },
+          { name: '更新学习会话', label: '更新学习会话', method: 'PATCH', params: { sessionId: { type: 'string', required: true, desc: '会话 ID' }, data: { type: 'object', required: true, desc: '更新字段' } } },
+          { name: '删除学习会话', label: '删除学习会话', method: 'DELETE', params: { sessionId: { type: 'string', required: true, desc: '会话 ID' } } },
+          { name: '获取分类学习', label: '获取分类学习', method: 'GET', params: { category: { type: 'string', required: true, desc: '分类 (hero/detail)' } } },
+          { name: '控制学习过程', label: '控制学习过程', method: 'POST', params: { category: { type: 'string', required: true, desc: '分类 (hero/detail)' }, action: { type: 'string', required: false, desc: '操作 (start/stop/retry)' } } },
+          { name: '审查学习结果', label: '审查学习结果', method: 'PATCH', params: { category: { type: 'string', required: true, desc: '分类' }, action: { type: 'string', required: true, desc: 'approve/reject' }, approvedKnowledgeIds: { type: 'array', required: false, desc: '批准的知识 ID' }, rejectReason: { type: 'string', required: false, desc: '拒绝原因' } } },
+          { name: '列出知识条目', label: '列出知识条目', method: 'GET', params: { sessionId: { type: 'string', required: false, desc: '会话 ID' }, type: { type: 'string', required: false, desc: '知识类型' }, stats: { type: 'boolean', required: false, desc: '返回统计' } } },
+          { name: '切换知识状态', label: '切换知识状态', method: 'PATCH', params: { knowledgeId: { type: 'string', required: true, desc: '知识 ID' }, isActive: { type: 'boolean', required: true, desc: '是否启用' } } },
+        ]
+      },
+      'AI 提供商': {
+        icon: '🤖',
+        tools: [
+          { name: '列出AI提供商', label: '列出AI提供商', method: 'GET', params: {} },
+          { name: '保存AI提供商', label: '保存AI提供商', method: 'POST', params: { data: { type: 'object', required: true, desc: '提供商配置' } } },
+          { name: '激活AI提供商', label: '激活AI提供商', method: 'PATCH', params: { providerId: { type: 'string', required: true, desc: '提供商 ID' } } },
+          { name: '测试提供商连接', label: '测试提供商连接', method: 'POST', params: { data: { type: 'object', required: true, desc: '连接信息' } } },
+          { name: '发现可用模型', label: '发现可用模型', method: 'POST', params: { data: { type: 'object', required: true, desc: '提供商信息' } } },
+          { name: '检测模型能力', label: '检测模型能力', method: 'POST', params: { data: { type: 'object', required: true, desc: '模型信息' } } },
+        ]
+      },
+      '系统管理': {
+        icon: '⚙️',
+        tools: [
+          { name: '获取知识约束配置', label: '获取知识约束配置', method: 'GET', params: {} },
+          { name: '更新知识约束配置', label: '更新知识约束配置', method: 'POST', params: { data: { type: 'object', required: true, desc: '约束配置' } } },
+          { name: '获取API用量统计', label: '获取API用量统计', method: 'GET', params: { hours: { type: 'number', required: false, desc: '查询小时数' }, limit: { type: 'number', required: false, desc: '每页数量' }, page: { type: 'number', required: false, desc: '页码' } } },
+          { name: '查询任务状态', label: '查询任务状态', method: 'GET', params: { taskId: { type: 'string', required: true, desc: '任务 ID' } } },
+        ]
+      },
+    };
+
+    /* ================================================================
+       Init
+       ================================================================ */
+    document.addEventListener('DOMContentLoaded', () => {
+      renderToolList();
+      updateStats();
+      log('MCP Web UI 已就绪', 'success');
+    });
+
+    /* ================================================================
+       Render Sidebar Tool List
+       ================================================================ */
+    function renderToolList(filter = '') {
+      const container = document.getElementById('toolList');
+      container.innerHTML = '';
+      const lf = filter.toLowerCase();
+      let totalVisible = 0;
+
+      for (const [catName, catData] of Object.entries(TOOL_CATEGORIES)) {
+        const filteredTools = catData.tools.filter(t =>
+          !lf || t.name.includes(lf) || t.label.includes(lf) || catName.includes(lf)
+        );
+        if (filteredTools.length === 0) continue;
+        totalVisible += filteredTools.length;
+
+        const catEl = document.createElement('div');
+        catEl.className = 'category';
+        catEl.innerHTML = `
+          <div class="category-header" onclick="this.parentElement.classList.toggle('collapsed')">
+            <span class="chevron">▼</span>
+            <span>${catData.icon} ${catName}</span>
+            <span class="count">${filteredTools.length}</span>
+          </div>
+          <div class="category-items">
+            ${filteredTools.map(t => `
+              <div class="tool-item" data-tool="${t.name}" onclick="selectTool('${t.name}')">
+                <span class="method-badge ${t.method.toLowerCase()}">${t.method}</span>
+                <span class="tool-name" title="${t.name}">${t.label}</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        container.appendChild(catEl);
+      }
+    }
+
+    /* ================================================================
+       Search
+       ================================================================ */
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+      renderToolList(e.target.value);
+    });
+
+    /* ================================================================
+       Select Tool
+       ================================================================ */
+    function findTool(name) {
+      for (const cat of Object.values(TOOL_CATEGORIES)) {
+        const t = cat.tools.find(t => t.name === name);
+        if (t) return t;
+      }
+      return null;
+    }
+
+    function selectTool(name) {
+      const tool = findTool(name);
+      if (!tool) return;
+      currentTool = tool;
+
+      // Update sidebar active state
+      document.querySelectorAll('.tool-item').forEach(el => el.classList.remove('active'));
+      const activeEl = document.querySelector(`.tool-item[data-tool="${name}"]`);
+      if (activeEl) activeEl.classList.add('active');
+
+      // Update breadcrumb
+      document.getElementById('breadcrumbTool').textContent = tool.label;
+
+      // Show tool detail, hide welcome
+      document.getElementById('welcomeScreen').style.display = 'none';
+      document.getElementById('toolDetail').classList.add('visible');
+
+      // Title & description
+      document.getElementById('toolTitle').textContent = tool.label;
+      document.getElementById('toolDesc').textContent = tool.name;
+
+      // Schema table
+      const params = tool.params || {};
+      const paramKeys = Object.keys(params);
+      const paramsPanel = document.getElementById('paramsPanel');
+      if (paramKeys.length > 0) {
+        paramsPanel.style.display = '';
+        document.getElementById('schemaBody').innerHTML = paramKeys.map(k => {
+          const p = params[k];
+          return `<tr>
+            <td>${k}</td>
+            <td><span class="type-badge">${p.type}</span></td>
+            <td>${p.required ? '<span class="required">必填</span>' : '<span class="optional">可选</span>'}</td>
+            <td>${p.desc || ''}</td>
+          </tr>`;
+        }).join('');
+      } else {
+        paramsPanel.style.display = 'none';
+      }
+
+      // Build default request body
+      resetParams();
+
+      // Hide previous response
+      document.getElementById('responsePanel').style.display = 'none';
+
+      log(`已选择工具: ${tool.name}`, 'info');
+    }
+
+    function selectToolByName(name) {
+      selectTool(name);
+    }
+
+    function resetParams() {
+      if (!currentTool) return;
+      const params = currentTool.params || {};
+      const defaultBody = {};
+      for (const [k, p] of Object.entries(params)) {
+        if (p.required) {
+          if (p.type === 'string') defaultBody[k] = '';
+          else if (p.type === 'number') defaultBody[k] = 0;
+          else if (p.type === 'boolean') defaultBody[k] = false;
+          else if (p.type === 'array') defaultBody[k] = [];
+          else if (p.type === 'object') defaultBody[k] = {};
+        }
+      }
+      document.getElementById('requestEditor').value = JSON.stringify(defaultBody, null, 2);
+    }
+
+    /* ================================================================
+       MCP Protocol Helpers
+       ================================================================ */
+    async function mcpRequest(method, params = {}) {
+      const body = JSON.stringify({
+        jsonrpc: '2.0',
+        id: Date.now(),
+        method,
+        params
+      });
+
+      const headers = {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json, text/event-stream'
+      };
+      if (sessionId) headers['Mcp-Session-Id'] = sessionId;
+
+      const resp = await fetch(endpoint, { method: 'POST', headers, body });
+
+      const newSessionId = resp.headers.get('Mcp-Session-Id');
+      if (newSessionId) sessionId = newSessionId;
+
+      const ct = resp.headers.get('content-type') || '';
+      let text;
+      if (ct.includes('text/event-stream')) {
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+        let result = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          result += decoder.decode(value, { stream: true });
+        }
+        text = result;
+      } else {
+        text = await resp.text();
+      }
+
+      try { return JSON.parse(text); } catch { return text; }
+    }
+
+    async function ensureSession() {
+      if (sessionId) return;
+      await mcpRequest('initialize', {
+        protocolVersion: '2025-03-26',
+        capabilities: {},
+        clientInfo: { name: 'ximo-mall-web-ui', version: '1.0.0' }
+      });
+      // Send initialized notification
+      await mcpRequest('notifications/initialized', {});
+    }
+
+    /* ================================================================
+       Call Tool
+       ================================================================ */
+    async function callTool() {
+      if (!currentTool) return;
+      const btn = document.getElementById('sendBtn');
+      btn.classList.add('loading');
+      btn.disabled = true;
+
+      let args;
+      try {
+        const editorVal = document.getElementById('requestEditor').value.trim();
+        args = editorVal ? JSON.parse(editorVal) : {};
+      } catch (e) {
+        showResponse({ error: 'JSON 解析错误: ' + e.message }, true);
+        btn.classList.remove('loading');
+        btn.disabled = false;
+        return;
+      }
+
+      log(`调用工具: ${currentTool.name}`, 'info');
+      const start = performance.now();
+
+      try {
+        await ensureSession();
+        const result = await mcpRequest('tools/call', {
+          name: currentTool.name,
+          arguments: args
+        });
+        const elapsed = (performance.now() - start).toFixed(0);
+        showResponse(result, false, elapsed);
+        callCount++;
+        document.getElementById('statCalls').textContent = callCount;
+        log(`工具调用成功 (${elapsed}ms)`, 'success');
+      } catch (e) {
+        showResponse({ error: e.message }, true);
+        log(`工具调用失败: ${e.message}`, 'error');
+      }
+
+      btn.classList.remove('loading');
+      btn.disabled = false;
+    }
+
+    /* ================================================================
+       Load Tools List (via MCP)
+       ================================================================ */
+    async function loadToolsList() {
+      log('正在获取工具列表...', 'info');
+      try {
+        await ensureSession();
+        const result = await mcpRequest('tools/list', {});
+        showResponse(result, false);
+        log('工具列表已获取', 'success');
+      } catch (e) {
+        showResponse({ error: e.message }, true);
+        log('获取工具列表失败: ' + e.message, 'error');
+      }
+    }
+
+    /* ================================================================
+       Response Display
+       ================================================================ */
+    function showResponse(data, isError, elapsed) {
+      const panel = document.getElementById('responsePanel');
+      const body = document.getElementById('responseBody');
+      const status = document.getElementById('responseStatus');
+      const time = document.getElementById('responseTime');
+
+      panel.style.display = '';
+      body.className = 'response-body ' + (isError ? 'error' : 'success');
+      body.innerHTML = syntaxHighlight(JSON.stringify(data, null, 2));
+      status.textContent = isError ? '❌ 错误' : '✅ 成功';
+      status.style.color = isError ? 'var(--error)' : 'var(--success)';
+      time.textContent = elapsed ? `${elapsed}ms` : '';
+    }
+
+    function syntaxHighlight(json) {
+      json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return json.replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+        (match) => {
+          let cls = 'json-number';
+          if (/^"/.test(match)) {
+            cls = /:$/.test(match) ? 'json-key' : 'json-string';
+          } else if (/true|false/.test(match)) {
+            cls = 'json-boolean';
+          } else if (/null/.test(match)) {
+            cls = 'json-null';
+          }
+          return `<span class="${cls}">${match}</span>`;
+        }
+      );
+    }
+
+    /* ================================================================
+       Logging
+       ================================================================ */
+    function log(msg, type = 'info') {
+      const panel = document.getElementById('logPanel');
+      const entry = document.createElement('div');
+      entry.className = 'log-entry ' + type;
+      entry.innerHTML = `<span class="log-time">${new Date().toLocaleTimeString()}</span><span class="log-msg">${msg}</span>`;
+      panel.appendChild(entry);
+      panel.scrollTop = panel.scrollHeight;
+    }
+
+    /* ================================================================
+       Stats
+       ================================================================ */
+    function updateStats() {
+      let totalTools = 0;
+      let totalCats = 0;
+      for (const cat of Object.values(TOOL_CATEGORIES)) {
+        totalTools += cat.tools.length;
+        totalCats++;
+      }
+      document.getElementById('statTools').textContent = totalTools;
+      document.getElementById('statCategories').textContent = totalCats;
+    }
+  </script>
+</body>
+</html>

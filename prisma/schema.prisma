@@ -1,0 +1,780 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum ProjectStatus {
+  DRAFT
+  ANALYZED
+  PLANNED
+  EDITING
+  COMPLETED
+}
+
+enum AssetType {
+  MAIN
+  ANGLE
+  DETAIL
+  REFERENCE
+  GENERATED
+  EXPORTED
+  PACKAGING
+  PRODUCT
+  INGREDIENT
+  INFO_CARD
+}
+
+enum SectionType {
+  HERO
+  SELLING_POINTS
+  SCENARIO
+  DETAIL_CLOSEUP
+  SPECS
+  MATERIAL
+  COMPARISON
+  GIFT_SCENE
+  BRAND_TRUST
+  SUMMARY
+  CUSTOM
+}
+
+enum GenerationStatus {
+  IDLE
+  QUEUED
+  GENERATING
+  SUCCESS
+  FAILED
+}
+
+enum TaskType {
+  ANALYZE
+  PLAN
+  GENERATE
+  REGENERATE
+  EXPORT
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model Project {
+  id              String           @id @default(cuid())
+  name            String
+  status          ProjectStatus    @default(DRAFT)
+  platform        String
+  style           String
+  description     String?
+  modelSnapshot   Json?
+  productLibraryId String?
+  productLibrary  ProductLibrary?  @relation(fields: [productLibraryId], references: [id], onDelete: SetNull)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  assets          ProductAsset[]
+  analysis        ProductAnalysis?
+  sections        PageSection[]
+  tasks           GenerationTask[]
+}
+
+model ProviderConfig {
+  id              String         @id @default(cuid())
+  name            String
+  baseUrl         String
+  apiKeyEncrypted String
+  isActive        Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  models          ModelProfile[]
+}
+
+model ModelProfile {
+  id                   String         @id @default(cuid())
+  providerConfigId     String
+  providerConfig       ProviderConfig @relation(fields: [providerConfigId], references: [id], onDelete: Cascade)
+  modelId              String
+  label                String
+  capabilities         Json
+  roles                Json
+  quality              String?
+  latency              String?
+  cost                 String?
+  isAvailable          Boolean        @default(true)
+  isDefaultAnalysis    Boolean        @default(false)
+  isDefaultPlanning    Boolean        @default(false)
+  isDefaultHeroImage   Boolean        @default(false)
+  isDefaultDetailImage Boolean        @default(false)
+  isDefaultImageEdit   Boolean        @default(false)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  @@unique([providerConfigId, modelId])
+  @@index([providerConfigId])
+}
+
+model ProductAsset {
+  id                String         @id @default(cuid())
+  projectId         String
+  project           Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sectionId         String?
+  section           PageSection?   @relation("SectionGeneratedAssets", fields: [sectionId], references: [id], onDelete: SetNull)
+  type              AssetType
+  filePath          String
+  fileName          String
+  mimeType          String?
+  sortOrder         Int            @default(0)
+  metadata          Json?
+  isMain            Boolean        @default(false)
+  createdAt         DateTime       @default(now())
+  currentForSection PageSection[]  @relation("CurrentSectionImage")
+  versions          SectionVersion[]
+
+  @@index([projectId, sortOrder])
+  @@index([sectionId])
+}
+
+model ProductAnalysis {
+  id               String   @id @default(cuid())
+  projectId        String   @unique
+  project          Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  rawResult        Json
+  normalizedResult Json
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model PageSection {
+  id                  String           @id @default(cuid())
+  projectId           String
+  project             Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sectionKey          String
+  type                SectionType
+  title               String
+  goal                String
+  copy                String
+  visualPrompt        String
+  order               Int
+  status              GenerationStatus @default(IDLE)
+  currentImageAssetId String?
+  currentImageAsset   ProductAsset?    @relation("CurrentSectionImage", fields: [currentImageAssetId], references: [id], onDelete: SetNull)
+  editableData        Json?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  versions            SectionVersion[]
+  generatedAssets     ProductAsset[]   @relation("SectionGeneratedAssets")
+  tasks               GenerationTask[]
+
+  @@unique([projectId, sectionKey])
+  @@index([projectId, order])
+}
+
+model SectionVersion {
+  id             String       @id @default(cuid())
+  sectionId      String
+  section        PageSection  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  versionNumber  Int
+  promptSnapshot Json
+  copySnapshot   Json
+  imageAssetId   String?
+  imageAsset     ProductAsset? @relation(fields: [imageAssetId], references: [id], onDelete: SetNull)
+  isActive       Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+
+  @@unique([sectionId, versionNumber])
+  @@index([sectionId, createdAt])
+}
+
+model GenerationTask {
+  id           String      @id @default(cuid())
+  projectId    String
+  project      Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sectionId    String?
+  section      PageSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  taskType     TaskType
+  status       TaskStatus  @default(PENDING)
+  inputPayload Json?
+  outputPayload Json?
+  errorMessage String?
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([projectId, createdAt])
+  @@index([sectionId, createdAt])
+}
+
+model ImageLibraryItem {
+  id          String   @id @default(cuid())
+  filePath    String
+  fileName    String
+  mimeType    String?
+  width       Int?
+  height      Int?
+  fileSize    Int?
+  title       String?
+  description String?
+  isPublic    Boolean  @default(true)
+  metadata    Json?
+  categoryId  String?
+  category    ImageCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tags            ImageLibraryItemTag[]
+  collectionItems ImageCollectionItem[]
+
+  @@index([categoryId])
+  @@index([createdAt])
+}
+
+model ImageCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  parentId    String?
+  parent      ImageCategory?  @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children    ImageCategory[] @relation("CategoryHierarchy")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  items ImageLibraryItem[]
+
+  @@index([parentId])
+  @@index([slug])
+}
+
+model ImageTag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  color     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items ImageLibraryItemTag[]
+
+  @@index([slug])
+}
+
+model ImageLibraryItemTag {
+  id    String           @id @default(cuid())
+  itemId String
+  tagId String
+  item  ImageLibraryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  tag   ImageTag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, tagId])
+  @@index([itemId])
+  @@index([tagId])
+}
+
+model ImageCollection {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  coverImageId String?
+  isPublic     Boolean  @default(true)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  items ImageCollectionItem[]
+
+  @@index([createdAt])
+}
+
+model ImageCollectionItem {
+  id           String          @id @default(cuid())
+  collectionId String
+  itemId       String
+  sortOrder    Int             @default(0)
+  collection   ImageCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  item         ImageLibraryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  createdAt    DateTime        @default(now())
+
+  @@unique([collectionId, itemId])
+  @@index([collectionId, sortOrder])
+  @@index([itemId])
+}
+
+// ==================== AI Agent 图片学习系统 ====================
+
+enum LearningStatus {
+  PENDING         // 待学习
+  LEARNING        // 学习中（图片分析中）
+  REVIEW_PENDING  // 待审查（知识提取完成，等待用户审查）
+  APPROVED        // 已批准（用户审查通过）
+  REJECTED        // 已拒绝（用户审查不通过）
+  COMPLETED       // 已完成（知识已应用）
+  FAILED          // 失败
+}
+
+enum LearningImageCategory {
+  HERO    // 头图
+  DETAIL  // 详情图
+}
+
+enum KnowledgeType {
+  STYLE       // 风格美学
+  LAYOUT      // 模板布局
+  TYPOGRAPHY  // 文案排版
+  COLOR       // 配色方案
+  SCENE       // 场景布置
+  CONTENT     // 内容元素
+}
+
+// 学习会话 - 用户投喂图片的学习过程
+model LearningSession {
+  id            String          @id @default(cuid())
+  name          String          // 学习会话名称
+  description   String?         // 描述
+  status        LearningStatus  @default(PENDING)
+  
+  // 学习配置
+  targetTypes   Json            // 学习目标类型 [STYLE, CONTENT, ...]
+  autoApply     Boolean         @default(true)  // 是否自动应用到其他 Agent
+  
+  // 统计
+  imageCount    Int             @default(0)
+  knowledgeCount Int            @default(0)
+  
+  // 关联
+  images        LearningImage[]
+  knowledges    StyleKnowledge[]
+  
+  // 元数据
+  metadata      Json?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// 学习图片 - 用户投喂的待学习图片
+model LearningImage {
+  id              String          @id @default(cuid())
+  sessionId       String
+  session         LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  // 图片信息
+  filePath        String
+  fileName        String
+  mimeType        String?
+  width           Int?
+  height          Int?
+  
+  // 来源
+  sourceType      String          // upload, library, project
+  sourceId        String?         // 关联的 library item 或 project asset id
+  
+  // 分类（头图/详情图）
+  category        LearningImageCategory?  // HERO / DETAIL
+
+  // 学习状态
+  status          LearningStatus  @default(PENDING)
+  analyzedAt      DateTime?
+  
+  // 学习结果 - 原始分析输出
+  analysisResult  Json?           // AI 视觉模型分析结果
+  
+  // 关联生成的知识
+  knowledges      KnowledgeSource[]
+  
+  // 被推荐记录
+  recommendations ReferenceRecommendation[]
+  
+  // 用户标注
+  userTags        String?         // 用户手动标签
+  userNotes       String?         // 用户备注
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([sessionId])
+  @@index([status])
+  @@index([sourceType, sourceId])
+}
+
+// 风格知识库 - 学习后提取的结构化知识
+model StyleKnowledge {
+  id              String          @id @default(cuid())
+  sessionId       String
+  session         LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  // 知识分类（头图/详情图）
+  category        LearningImageCategory?
+
+  // 知识类型
+  type            KnowledgeType
+  
+  // 知识内容
+  name            String          // 知识名称
+  description     String          // 详细描述
+  
+  // 结构化数据
+  attributes      Json            // 属性数据（颜色值、字体、布局参数等）
+  
+  // 提示词增强
+  promptSnippet   String?         // 用于注入提示词的片段
+  negativePrompt  String?         // 负面提示词
+  
+  // 置信度
+  confidence      Float           @default(0.8)
+  sampleCount     Int             @default(1)   // 基于多少样本学习
+  
+  // 关联图片
+  sources         KnowledgeSource[]
+  
+  // 应用记录
+  applies         AgentKnowledgeApply[]
+  
+  // 应用统计
+  applyCount      Int             @default(0)   // 被应用次数
+  lastAppliedAt   DateTime?
+  
+  // 状态
+  isActive        Boolean         @default(true)
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([sessionId])
+  @@index([type])
+  @@index([isActive])
+  @@index([confidence])
+}
+
+// 知识来源关联 - 记录知识从哪些图片学习而来
+model KnowledgeSource {
+  id            String          @id @default(cuid())
+  knowledgeId   String
+  knowledge     StyleKnowledge  @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
+  imageId       String
+  image         LearningImage   @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  
+  // 该图片对此知识的贡献度
+  weight        Float           @default(1.0)
+  
+  // 该图片中此知识的具体表现
+  attributes    Json?           // 图片特定的属性值
+  
+  createdAt     DateTime        @default(now())
+
+  @@unique([knowledgeId, imageId])
+  @@index([knowledgeId])
+  @@index([imageId])
+}
+
+// Agent 知识应用记录 - 跟踪知识如何被其他 Agent 使用
+model AgentKnowledgeApply {
+  id              String          @id @default(cuid())
+  
+  // 应用上下文
+  agentType       String          // 哪个 Agent: ANALYSIS, PLANNING, GENERATION
+  projectId       String?
+  sectionId       String?
+  taskId          String?
+  
+  // 应用的知识
+  knowledgeId     String
+  knowledge       StyleKnowledge  @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
+  
+  // 应用方式
+  applyMethod     String          // prompt_injection, reference_image, parameter_adjust
+  applyDetails    Json            // 应用详情
+  
+  // 效果反馈
+  userRating      Int?            // 用户评分 1-5
+  userFeedback    String?         // 用户反馈
+  
+  createdAt       DateTime        @default(now())
+
+  @@index([agentType])
+  @@index([projectId])
+  @@index([knowledgeId])
+  @@index([createdAt])
+}
+
+// 参考图片推荐 - 为生成任务推荐的参考图片
+model ReferenceRecommendation {
+  id              String          @id @default(cuid())
+  
+  // 推荐上下文
+  projectId       String
+  sectionId       String?
+  taskType        String          // GENERATE, REGENERATE, EDIT
+  
+  // 推荐的图片
+  learningImageId String
+  learningImage   LearningImage   @relation(fields: [learningImageId], references: [id], onDelete: Cascade)
+  
+  // 推荐理由
+  reason          String          // 为什么推荐这张
+  matchScore      Float           // 匹配度分数
+  
+  // 使用的知识类型
+  matchedKnowledgeIds Json        // 匹配的知识ID列表
+  
+  // 是否被采用
+  isAdopted       Boolean         @default(false)
+  adoptedAt       DateTime?
+  
+  createdAt       DateTime        @default(now())
+
+  @@index([projectId])
+  @@index([sectionId])
+  @@index([learningImageId])
+  @@index([isAdopted])
+}
+
+// 知识应用约束配置 - 控制智能体如何使用知识
+model KnowledgeConstraints {
+  id              String          @id @default(cuid())
+  
+  // 约束类型
+  agentType       String          // 约束应用到的 Agent 类型: ANALYSIS, PLANNING, GENERATION
+  
+  // 置信度约束
+  minConfidence   Float           @default(0.5)   // 最低置信度阈值
+  maxConfidence   Float           @default(1.0)   // 最高置信度阈值
+  
+  // 应用频率约束
+  maxAppliesPerDay Int           @default(50)    // 每日最大应用次数
+  maxAppliesPerSession Int        @default(10)   // 每个会话最大应用次数
+  
+  // 知识类型约束
+  allowedTypes    Json?          // 允许的知识类型白名单，null表示全部允许
+  blockedTypes     Json?          // 禁止的知识类型黑名单
+  
+  // 内容约束
+  maxPromptLength  Int           @default(500)   // 注入提示词的最大长度
+  enableNegative   Boolean        @default(true)  // 是否启用负面提示词
+  
+  // 效果追踪
+  trackEffectiveness Boolean     @default(true)  // 是否追踪效果
+  
+  // 约束状态
+  isActive        Boolean        @default(true)
+  
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([agentType])
+  @@index([isActive])
+}
+
+// 知识应用日志 - 记录知识应用历史用于分析
+model KnowledgeApplyLog {
+  id              String          @id @default(cuid())
+  
+  // 应用信息
+  knowledgeId     String
+  agentType       String
+  
+  // 应用上下文
+  projectId       String?
+  sessionId       String?
+  
+  // 应用方式
+  applyMethod     String          // prompt_injection, reference_image, parameter_adjust
+  
+  // 应用内容
+  promptSnippet   String?         // 实际应用的提示词片段
+  
+  // 效果反馈
+  rating          Int?            // 用户评分 1-5
+  feedback       String?         // 用户反馈
+  wasHelpful     Boolean?        // 是否有帮助
+  
+  // 约束检查结果
+  passedConstraints Boolean       // 是否通过约束检查
+  failedReason   String?         // 如果未通过，记录原因
+  
+  createdAt       DateTime        @default(now())
+
+  @@index([knowledgeId])
+  @@index([agentType])
+  @@index([createdAt])
+  @@index([rating])
+}
+
+// ==================== 面条品类知识库系统 ====================
+
+enum KBImageCategory {
+  HERO    // 头图
+  DETAIL  // 详情图
+}
+
+enum KBImageStatus {
+  PENDING   // 待分析
+  ANALYZED  // 已分析
+  FAILED    // 分析失败
+}
+
+enum KBStatus {
+  ACTIVE    // 活跃
+  ARCHIVED  // 已归档
+}
+
+// 面条品类知识库 - 按面条类型分类的知识库
+model NoodleKnowledgeBase {
+  id              String    @id @default(cuid())
+  slug            String    @unique  // banmian | zhushengmian | laomian | dawanmian
+  name            String             // 拌面 | 竹升面 | 捞面 | 大碗面
+  description     String?
+  coverImage      String?
+  imageCount      Int       @default(0)
+  knowledgeCount  Int       @default(0)
+  summary         Json?              // 量化总结数据
+  status          KBStatus  @default(ACTIVE)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  images     NoodleKBImage[]
+  knowledges NoodleKBKnowledge[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// 知识库图片 - 存储上传的训练图片
+model NoodleKBImage {
+  id              String        @id @default(cuid())
+  kbId            String
+  kb              NoodleKnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
+  filePath        String
+  fileName        String
+  mimeType        String
+  fileSize        Int
+  category        KBImageCategory     // HERO | DETAIL
+  analysisResult  Json?               // AI分析结果
+  status          KBImageStatus @default(PENDING)
+  analyzedAt      DateTime?
+  createdAt       DateTime    @default(now())
+
+  @@index([kbId])
+  @@index([status])
+  @@index([category])
+}
+
+// 知识库知识 - 从图片中提取的结构化知识
+model NoodleKBKnowledge {
+  id              String    @id @default(cuid())
+  kbId            String
+  kb              NoodleKnowledgeBase @relation(fields: [kbId], references: [id], onDelete: Cascade)
+  type            String              // STYLE | LAYOUT | TYPOGRAPHY | APPETITE | INGREDIENT
+  name            String
+  description     String
+  attributes      Json?               // 知识属性（颜色值、尺寸、频率等）
+  confidence      Float     @default(0.8)
+  sampleCount     Int       @default(1)
+  sourceImageIds  Json?               // 来源图片ID列表
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([kbId])
+  @@index([type])
+  @@index([isActive])
+  @@index([confidence])
+}
+
+enum PLStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum PLAnalysisStatus {
+  PENDING
+  ANALYZING
+  ANALYZED
+  FAILED
+}
+
+enum KnowledgeCategory {
+  USAGE_SCENARIO    // 使用场景
+  SELLING_POINT     // 核心卖点
+  SPECIFICATION     // 产品规格
+  MATERIAL          // 材质/原料
+  TARGET_AUDIENCE   // 目标人群
+  BRAND_INFO        // 品牌信息
+  OTHER             // 其他
+}
+
+// 产品库 — 用户添加的产品条目（RAG 知识库）
+model ProductLibrary {
+  id            String   @id @default(cuid())
+  slug          String   @unique   // 自动生成的唯一标识
+  name          String             // 产品名称
+  description   String?            // 产品描述
+  coverImage    String?            // 封面图路径
+  imageCount    Int      @default(0)
+  knowledgeCount Int     @default(0) // 知识条目数
+  status        PLStatus @default(ACTIVE)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  images           ProductLibraryImage[]
+  knowledgeEntries ProductKnowledgeEntry[]
+  projects         Project[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// 产品库图片 — 上传的待分析图片
+model ProductLibraryImage {
+  id            String      @id @default(cuid())
+  productId     String
+  product       ProductLibrary @relation(fields: [productId], references: [id], onDelete: Cascade)
+  filePath      String
+  fileName      String
+  mimeType      String
+  fileSize      Int
+
+  // 分析状态
+  analysisStatus  PLAnalysisStatus @default(PENDING)
+  analyzedAt      DateTime?
+
+  // 分析结果（精简后的核心产品信息）
+  rawAnalysisResult Json?
+
+  knowledgeEntries ProductKnowledgeEntry[]
+
+  createdAt     DateTime    @default(now())
+
+  @@index([productId])
+  @@index([analysisStatus])
+}
+
+// 产品知识条目 — RAG 检索的基本单元
+model ProductKnowledgeEntry {
+  id            String   @id @default(cuid())
+  productId     String
+  product       ProductLibrary @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sourceImageId String?  // 来源图片 ID（可为空，支持手动录入）
+  sourceImage   ProductLibraryImage? @relation(fields: [sourceImageId], references: [id], onDelete: SetNull)
+
+  // 知识条目内容
+  category      KnowledgeCategory  // 条目分类
+  title         String             // 条目标题（简短概括）
+  content       String             // 条目内容（详细文本，用于检索和展示）
+  metadata      Json?              // 附加结构化数据
+
+  // 向量索引
+  embedding     Json?              // 向量表示（float 数组），用于相似度检索
+
+  createdAt     DateTime @default(now())
+
+  @@index([productId])
+  @@index([category])
+}

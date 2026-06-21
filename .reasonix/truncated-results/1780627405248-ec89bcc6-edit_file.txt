@@ -1,0 +1,646 @@
+edited components/projects/quick-start-workspace.tsx (13081→18236 chars)
+@@ -1,330 +1,468 @@
+  "use client";
+  
+- import { useEffect, useMemo, useState } from "react";
+- import { ImagePlus, Loader2, UploadCloud, X } from "lucide-react";
++ import { useCallback, useEffect, useMemo, useState } from "react";
++ import { ImagePlus, Loader2, UploadCloud, X, Package, Search } from "lucide-react";
+  import { toast } from "sonner";
+  import { useRouter } from "next/navigation";
+  
+  import { Button } from "@/components/ui/button";
+  import { Input } from "@/components/ui/input";
++ 
+  import { fileToBase64Payload } from "@/lib/utils/base64-upload";
+  
+- const MAX_FILES = 6;
++ const MAX_ASSOCIATED_FILES = 5;
++ 
++ interface ProductLibraryOption {
++   id: string;
++   slug: string;
++   name: string;
++   description: string | null;
++   imageCount: number;
++   knowledgeCount: number;
++ }
+  
+  function buildDraftProjectName() {
+    const now = new Date();
+    const parts = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0"),
+      String(now.getHours()).padStart(2, "0"),
+      String(now.getMinutes()).padStart(2, "0"),
+    ];
+  
+    return `未命名商品项目-${parts.join("")}`;
+  }
+  
+  export function QuickStartWorkspace() {
+    const router = useRouter();
+-   // files[0] = 产品主体图, files[1..] = 关联图
+-   const [files, setFiles] = useState<File[]>([]);
++ 
++   // ========== 图片状态 ==========
++   const [mainFile, setMainFile] = useState<File | null>(null);
++   const [associatedFiles, setAssociatedFiles] = useState<File[]>([]);
+    const [submitting, setSubmitting] = useState(false);
++ 
++   // ========== 产品知识库 ==========
++   const [products, setProducts] = useState<ProductLibraryOption[]>([]);
++   const [productsLoading, setProductsLoading] = useState(true);
++   const [selectedProductId, setSelectedProductId] = useState("");
+  
++   // ========== 预览 URL ==========
++   const allFiles = useMemo(
++     () => (mainFile ? [mainFile, ...associatedFiles] : []),
++     [mainFile, associatedFiles],
++   );
+    const previewUrls = useMemo(
+-     () => files.map((file) => URL.createObjectURL(file)),
+-     [files],
++     () => allFiles.map((file) => URL.createObjectURL(file)),
++     [allFiles],
+    );
+  
+    useEffect(() => {
+      return () => {
+        previewUrls.forEach((url) => URL.revokeObjectURL(url));
+      };
+    }, [previewUrls]);
+  
+-   const mainFile = files[0] ?? null;
+-   const associatedFiles = files.slice(1);
+-   const hasAssociatedImages = associatedFiles.length > 0;
++   // ========== 加载产品知识库列表 ==========
++   useEffect(() => {
++     let cancelled = false;
++     async function loadProducts() {
++       try {
++         const res = await fetch("/api/product-library");
++         if (!res.ok) return;
++         const payload = await res.json();
++         if (!cancelled) {
++           setProducts((payload.data ?? payload ?? []) as ProductLibraryOption[]);
++         }
++       } catch {
++         // 静默失败，不影响主流程
++       } finally {
++         if (!cancelled) setProductsLoading(false);
++       }
++     }
++     loadProducts();
++     return () => { cancelled = true; };
++   }, []);
+  
+-   const handleFileSelect = (selectedFiles: FileList | null) => {
+-     if (!selectedFiles || selectedFiles.length === 0) return;
++   // ========== 主体图 ==========
++   const mainPreviewUrl = mainFile ? previewUrls[0] : null;
+  
+-     const newFiles = Array.from(selectedFiles);
+-     // Security: Validate file types client-side (server also validates)
+-     const invalidFiles = newFiles.filter(
+-       (f) => !f.type.startsWith("image/"),
+-     );
+-     if (invalidFiles.length > 0) {
+-       toast.error(`不支持的文件类型：${invalidFiles.map((f) => f.name).join("、")}`);
++   const handleMainFileSelect = useCallback((fileList: FileList | null) => {
++     if (!fileList || fileList.length === 0) return;
++     const file = fileList[0];
++     if (!file.type.startsWith("image/")) {
++       toast.error("不支持的文件类型，请选择图片文件");
+        return;
+      }
++     setMainFile(file);
++   }, []);
+  
+-     // 限制总文件数
+-     if (newFiles.length > MAX_FILES) {
+-       toast.error(`最多上传 ${MAX_FILES} 张图片`);
++   const clearMainFile = useCallback(() => {
++     setMainFile(null);
++   }, []);
++ 
++   // ========== 关联图 ==========
++   const handleAssociatedFilesSelect = useCallback((fileList: FileList | null) => {
++     if (!fileList || fileList.length === 0) return;
++     const incoming = Array.from(fileList);
++ 
++     const invalid = incoming.filter((f) => !f.type.startsWith("image/"));
++     if (invalid.length > 0) {
++       toast.error(`不支持的文件类型：${invalid.map((f) => f.name).join("、")}`);
+        return;
+      }
+  
+-     setFiles(newFiles);
+-   };
++     setAssociatedFiles((prev) => {
++       const combined = [...prev, ...incoming];
++       if (combined.length > MAX_ASSOCIATED_FILES) {
++         toast.error(`关联图最多 ${MAX_ASSOCIATED_FILES} 张`);
++         return prev;
++       }
++       return combined;
++     });
++   }, []);
+  
+-   const removeAssociatedFile = (index: number) => {
+-     setFiles((prev) => prev.filter((_, i) => i !== index + 1));
+-   };
++   const removeAssociatedFile = useCallback((index: number) => {
++     setAssociatedFiles((prev) => prev.filter((_, i) => i !== index));
++   }, []);
+  
++   // ========== 提交 ==========
+    const handleStart = async () => {
+-     if (files.length === 0) {
+-       toast.error("请先上传产品图片。首张为产品主体图，其余为关联场景图。");
++     if (!mainFile) {
++       toast.error("请先上传产品主体图");
+        return;
+      }
+  
+      setSubmitting(true);
+  
+      try {
+        // 步骤1：创建项目
++       const createBody: Record<string, unknown> = {
++         name: buildDraftProjectName(),
++         platform: "general_ecommerce",
++         style: "generic_clean",
++         description: "由首页快速开始自动创建",
++       };
++       if (selectedProductId) {
++         createBody.productLibraryId = selectedProductId;
++       }
++ 
+        const createResponse = await fetch("/api/projects", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+-         body: JSON.stringify({
+-           name: buildDraftProjectName(),
+-           platform: "general_ecommerce",
+-           style: "generic_clean",
+-           description: "由首页快速开始自动创建",
+-         }),
++         body: JSON.stringify(createBody),
+        });
+        const createdPayload = await createResponse.json();
+        if (!createdPayload.success) {
+          throw new Error(createdPayload.error?.message ?? "创建项目失败");
+        }
+  
+        const projectId = createdPayload.data.id as string;
+  
+-       // 步骤2：按顺序上传所有图片
+-       // 首张 -> type=MAIN（产品主体），其余 -> type=REFERENCE（关联图）
+-       const uploadAssetTypes = ["MAIN", ...Array(files.length - 1).fill("REFERENCE")];
++       // 步骤2：上传主体图 (MAIN) + 关联图 (REFERENCE)
++       const filesToUpload = [mainFile, ...associatedFiles];
++       const assetTypes = ["MAIN", ...associatedFiles.map(() => "REFERENCE")];
+  
+-       for (let i = 0; i < files.length; i++) {
+-         const base64Payload = await fileToBase64Payload(files[i]);
++       for (let i = 0; i < filesToUpload.length; i++) {
++         const base64Payload = await fileToBase64Payload(filesToUpload[i]);
+          const uploadResponse = await fetch(`/api/projects/${projectId}/assets/upload`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+-             type: uploadAssetTypes[i],
++             type: assetTypes[i],
+              ...base64Payload,
+            }),
+          });
+          const uploadPayload = await uploadResponse.json();
+          if (!uploadPayload.success) {
+            throw new Error(uploadPayload.error?.message ?? `第 ${i + 1} 张图片上传失败`);
+          }
+        }
+  
+-       // 步骤3：触发 AI 分析（包含主体+关联图上下文的单会话串联分析）
+-       const hasAssociatedImages = associatedFiles.length > 0;
++       // 步骤3：触发 AI 分析
++       const hasAssoc = associatedFiles.length > 0;
+        const analyzeResponse = await fetch(`/api/projects/${projectId}/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+-           hasAssociatedImages,
++           hasAssociatedImages: hasAssoc,
+            associatedImageCount: associatedFiles.length,
+          }),
+        });
+        const analyzePayload = await analyzeResponse.json();
+  
+        if (!analyzePayload.success) {
+          const rawErrorCode = String(analyzePayload.error?.code ?? "");
+          const shouldAutoRetry = rawErrorCode === "PROVIDER_TIMEOUT";
+          const errorCode = encodeURIComponent(rawErrorCode);
+          const errorMessage = encodeURIComponent(
+            String(analyzePayload.error?.message ?? "图片已上传，但自动分析未完成。"),
+          );
+  
+          toast.warning(
+            shouldAutoRetry
+              ? "图片已上传，正在为你跳转到分析页继续自动重试。"
+              : "图片已上传，已为你跳转到分析页继续处理。",
+          );
+  
+          router.push(
+            `/projects/${projectId}/analysis?source=quick-start${shouldAutoRetry ? "&autoRun=1" : ""}&analysisErrorCode=${errorCode}&analysisErrorMessage=${errorMessage}`,
+          );
+          return;
+        }
+  
+-       const imageCount = files.length;
++       const totalImages = filesToUpload.length;
+        toast.success(
+-         hasAssociatedImages
+-           ? `${imageCount} 张图片上传完成，AI 已串联分析主体与关联场景。`
++         hasAssoc
++           ? `${totalImages} 张图片上传完成，AI 已串联分析主体与关联场景。`
+            : "主图上传完成，AI 已自动完成首轮分析。",
+        );
+        router.push(`/projects/${projectId}/analysis`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "快速开始失败");
+      } finally {
+        setSubmitting(false);
+      }
+    };
++ 
++   const canSubmit = !!mainFile && !submitting;
+  
++   // ========== 渲染 ==========
+    return (
+      <section className="mx-auto max-w-6xl space-y-8">
++       {/* 页头 */}
+        <div className="space-y-4 text-center">
+          <h1 className="text-4xl font-semibold tracking-[-0.06em] text-slate-950 dark:text-white md:text-5xl">
+            上传产品图片
+          </h1>
+          <p className="mx-auto max-w-2xl text-lg leading-8 text-slate-500 dark:text-slate-400">
+-           上传一张产品主体图，可添加关联场景图辅助 AI 理解产品使用场景
++           上传产品主体图与关联场景图，AI 将自动分析并生成电商详情页
+          </p>
+        </div>
+  
+        <div className="rounded-[2rem] border border-slate-200 bg-white/84 p-6 shadow-soft backdrop-blur-xl dark:border-white/10 dark:bg-white/6 md:p-10">
+-         <div className="rounded-[1.75rem] border border-dashed border-slate-300 bg-white/50 p-6 dark:border-white/10 dark:bg-white/[0.03] md:p-12">
+-           <Input
+-             id="quick-start-file"
+-             type="file"
+-             accept="image/*"
+-             multiple
+-             onChange={(event) => handleFileSelect(event.target.files)}
+-             className="hidden"
+-           />
++         {/* ====== 产品知识库下拉 ====== */}
++         {products.length > 0 && (
++           <div className="mb-8">
++             <label className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300">
++               <Search className="h-4 w-4" />
++               从产品知识库索引
++             </label>
++             <div className="relative">
++               <select
++                 value={selectedProductId}
++                 onChange={(e) => setSelectedProductId(e.target.value)}
++                 className="w-full appearance-none rounded-xl border border-slate-200 bg-white/80 px-4 py-3 text-sm text-slate-700 shadow-sm transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 dark:border-white/10 dark:bg-white/5 dark:text-slate-200 dark:focus:border-blue-500/50 dark:focus:ring-blue-500/20"
++               >
++                 <option value="">— 不指定（仅基于图片分析） —</option>
++                 {products.map((p) => (
++                   <option key={p.id} value={p.id}>
++                     {p.name}
++                     {p.knowledgeCount > 0 ? `（${p.knowledgeCount} 条知识）` : "（待录入）"}
++                   </option>
++                 ))}
++               </select>
++               {productsLoading && (
++                 <div className="pointer-events-none absolute inset-y-0 right-10 flex items-center">
++                   <Loader2 className="h-4 w-4 animate-spin text-slate-400" />
++                 </div>
++               )}
++               <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
++                 <svg className="h-4 w-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
++                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
++                 </svg>
++               </div>
++             </div>
++             <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
++               选择已录入的产品后，AI 将结合产品知识库中的结构化信息辅助分析
++             </p>
++           </div>
++         )}
+  
+-           <label
+-             htmlFor="quick-start-file"
+-             className="flex min-h-[420px] cursor-pointer flex-col items-center justify-center rounded-[1.5rem] transition hover:bg-slate-50/80 dark:hover:bg-white/[0.04]"
+-           >
+-             {mainFile ? (
+-               <div className="flex w-full flex-col items-center justify-center">
+-                 {/* 主体图预览 */}
+-                 <div className="w-[170px] overflow-hidden rounded-[1.2rem] bg-slate-100 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.32)] dark:bg-white/8 md:w-[200px]">
++         {/* ====== 双区上传 ====== */}
++         <div className="grid gap-6 md:grid-cols-2">
++           {/* ── 左侧：产品主体图 ── */}
++           <div className="rounded-[1.75rem] border border-dashed border-blue-200 bg-blue-50/50 p-6 dark:border-blue-500/20 dark:bg-blue-500/[0.04]">
++             <div className="mb-3 flex items-center gap-2">
++               <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
++                 必选
++               </span>
++               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
++                 产品主体图
++               </span>
++             </div>
++ 
++             <Input
++               id="main-file-input"
++               type="file"
++               accept="image/*"
++               onChange={(event) => handleMainFileSelect(event.target.files)}
++               className="hidden"
++             />
++ 
++             {mainPreviewUrl ? (
++               <div className="flex flex-col items-center">
++                 <label
++                   htmlFor="main-file-input"
++                   className="group relative w-full max-w-[240px] cursor-pointer overflow-hidden rounded-[1.2rem] bg-slate-100 shadow-[0_20px_50px_-30px_rgba(0,0,0,0.32)] dark:bg-white/8"
++                 >
+                    <div className="aspect-square">
+                      <img
+-                       src={previewUrls[0]}
+-                       alt={mainFile.name}
+-                       className="h-full w-full object-cover"
++                       src={mainPreviewUrl}
++                       alt={mainFile!.name}
++                       className="h-full w-full object-cover transition group-hover:opacity-90"
+                      />
++                   </div>
++                   <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/20">
++                     <span className="rounded-full bg-white/90 px-3 py-1 text-xs font-medium text-slate-700 opacity-0 transition group-hover:opacity-100">
++                       点击更换
++                     </span>
+                    </div>
++                 </label>
++                 <button
++                   type="button"
++                   onClick={clearMainFile}
++                   className="mt-2 text-xs text-slate-400 underline-offset-2 hover:text-red-500 hover:underline dark:text-slate-500 dark:hover:text-red-400"
++                 >
++                   移除主体图
++                 </button>
++               </div>
++             ) : (
++               <label
++                 htmlFor="main-file-input"
++                 className="flex min-h-[280px] cursor-pointer flex-col items-center justify-center rounded-[1.5rem] transition hover:bg-white/60 dark:hover:bg-white/[0.04]"
++               >
++                 <div className="flex h-16 w-16 items-center justify-center rounded-[1.5rem] border-2 border-blue-200 bg-white text-blue-500 shadow-sm dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-400">
++                   <UploadCloud className="h-7 w-7" />
+                  </div>
++                 <p className="mt-4 text-sm font-medium text-slate-700 dark:text-slate-300">
++                   点击上传产品主体图
++                 </p>
++                 <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
++                   JPG / PNG / WEBP，建议白底或纯色背景
++                 </p>
++               </label>
++             )}
++           </div>
+  
+-                 <div className="mt-3 text-center">
+-                   <span className="inline-block rounded-full bg-blue-100 px-3 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+-                     产品主体图
+-                   </span>
+-                 </div>
++           {/* ── 右侧：产品关联图 ── */}
++           <div className="rounded-[1.75rem] border border-dashed border-slate-300 bg-white/50 p-6 dark:border-white/10 dark:bg-white/[0.03]">
++             <div className="mb-3 flex items-center gap-2">
++               <span className="rounded-full bg-slate-200 px-2.5 py-0.5 text-xs font-medium text-slate-600 dark:bg-white/10 dark:text-slate-400">
++                 可选
++               </span>
++               <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
++                 产品关联图
++               </span>
++               {associatedFiles.length > 0 && (
++                 <span className="ml-auto text-xs text-slate-400 dark:text-slate-500">
++                   {associatedFiles.length}/{MAX_ASSOCIATED_FILES}
++                 </span>
++               )}
++             </div>
+  
+-                 {/* 关联图预览 */}
+-                 {associatedFiles.length > 0 && (
+-                   <div className="mt-5 w-full max-w-md">
+-                     <div className="mb-2 flex items-center justify-center gap-2">
+-                       <ImagePlus className="h-4 w-4 text-slate-400" />
+-                       <span className="text-sm text-slate-500 dark:text-slate-400">
+-                         关联场景图（{associatedFiles.length}/{MAX_FILES - 1}）
+-                       </span>
+-                     </div>
+-                     <div className="flex flex-wrap justify-center gap-3">
+-                       {associatedFiles.map((assocFile, idx) => (
+-                         <div
+-                           key={`${assocFile.name}-${idx}`}
+-                           className="group relative w-[100px] overflow-hidden rounded-xl bg-slate-100 shadow-sm dark:bg-white/8"
+-                         >
+-                           <div className="aspect-square">
+-                             <img
+-                               src={previewUrls[idx + 1]}
+-                               alt={assocFile.name}
+-                               className="h-full w-full object-cover"
+-                             />
+-                           </div>
+-                           <button
+-                             type="button"
+-                             onClick={(e) => {
+-                               e.stopPropagation();
+-                               e.preventDefault();
+-                               removeAssociatedFile(idx);
+-                             }}
+-                             className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/90 text-white opacity-0 transition-opacity group-hover:opacity-100"
+-                             title="移除关联图"
+-                           >
+-                             <X className="h-3 w-3" />
+-                           </button>
+-                           <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1 text-[10px] text-white">
+-                             关联图 {idx + 1}
+-                           </div>
+-                         </div>
+-                       ))}
++             <Input
++               id="associated-file-input"
++               type="file"
++               accept="image/*"
++               multiple
++               onChange={(event) => handleAssociatedFilesSelect(event.target.files)}
++               className="hidden"
++             />
+  
+-                       {/* 添加更多关联图按钮 */}
+-                       {associatedFiles.length < MAX_FILES - 1 && (
+-                         <div className="flex w-[100px] items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 transition hover:border-slate-400 dark:border-white/15 dark:bg-white/[0.03] dark:hover:border-white/25">
+-                           <div className="aspect-square flex flex-col items-center justify-center p-2 text-center">
+-                             <ImagePlus className="h-5 w-5 text-slate-350 dark:text-slate-500" />
+-                             <span className="mt-1 text-[10px] leading-tight text-slate-400 dark:text-slate-500">
+-                               添加关联图
+-                             </span>
+-                           </div>
+-                         </div>
+-                       )}
++             {associatedFiles.length > 0 ? (
++               <div className="flex flex-wrap gap-3">
++                 {associatedFiles.map((file, idx) => {
++                   const url = previewUrls[1 + idx]; // mainFile is [0]
++                   return (
++                     <div
++                       key={`${file.name}-${idx}`}
++                       className="group relative w-[100px] overflow-hidden rounded-xl bg-slate-100 shadow-sm dark:bg-white/8"
++                     >
++                       <div className="aspect-square">
++                         <img
++                           src={url}
++                           alt={file.name}
++                           className="h-full w-full object-cover"
++                         />
++                       </div>
++                       <button
++                         type="button"
++                         onClick={() => removeAssociatedFile(idx)}
++                         className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500/90 text-white opacity-0 transition-opacity group-hover:opacity-100"
++                         title="移除"
++                       >
++                         <X className="h-3 w-3" />
++                       </button>
++                       <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1 text-[10px] text-white">
++                         关联图 {idx + 1}
++                       </div>
+                      </div>
+-                   </div>
+-                 )}
++                   );
++                 })}
+  
+-                 {/* 状态文案 */}
+-                 <div className="mt-6 space-y-2 text-center">
+-                   {submitting ? (
+-                     <div className="inline-flex items-center gap-2 text-lg text-slate-400 dark:text-slate-500">
+-                       <Loader2 className="h-5 w-5 animate-spin" />
+-                       <span>正在分析产品...</span>
++                 {/* 添加更多 */}
++                 {associatedFiles.length < MAX_ASSOCIATED_FILES && (
++                   <label
++                     htmlFor="associated-file-input"
++                     className="flex w-[100px] cursor-pointer items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 transition hover:border-slate-400 dark:border-white/15 dark:bg-white/[0.03] dark:hover:border-white/25"
++                   >
++                     <div className="aspect-square flex flex-col items-center justify-center p-2 text-center">
++                       <ImagePlus className="h-5 w-5 text-slate-400 dark:text-slate-500" />
++                       <span className="mt-1 text-[10px] leading-tight text-slate-400 dark:text-slate-500">
++                         继续添加
++                       </span>
+                      </div>
+-                   ) : (
+-                     <>
+-                       <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+-                         {hasAssociatedImages ? `已选择 ${files.length} 张图片` : "已选择产品图"}
+-                       </p>
+-                       {hasAssociatedImages ? (
+-                         <p className="text-sm text-slate-400 dark:text-slate-500">
+-                           1 张主体图 + {associatedFiles.length} 张关联场景图
+-                         </p>
+-                       ) : (
+-                         <p className="max-w-md truncate text-sm text-slate-400 dark:text-slate-500">
+-                           {mainFile?.name}
+-                         </p>
+-                       )}
+-                       <p className="text-sm text-slate-400 dark:text-slate-500">
+-                         点击图片区域可重新选择
+-                       </p>
+-                     </>
+-                   )}
+-                 </div>
++                   </label>
++                 )}
+                </div>
+              ) : (
+-               <div className="flex flex-col items-center justify-center text-center">
+-                 <div className="flex h-20 w-20 items-center justify-center rounded-[1.75rem] border border-slate-200 bg-white text-slate-900 shadow-sm dark:border-white/10 dark:bg-black/30 dark:text-white">
+-                   <UploadCloud className="h-8 w-8" />
++               <label
++                 htmlFor="associated-file-input"
++                 className="flex min-h-[280px] cursor-pointer flex-col items-center justify-center rounded-[1.5rem] transition hover:bg-slate-50/80 dark:hover:bg-white/[0.04]"
++               >
++                 <div className="flex h-14 w-14 items-center justify-center rounded-[1.25rem] border-2 border-dashed border-slate-300 bg-white text-slate-400 shadow-sm dark:border-white/15 dark:bg-white/5 dark:text-slate-500">
++                   <ImagePlus className="h-6 w-6" />
+                  </div>
+-                 <p className="mt-6 text-lg font-medium text-slate-900 dark:text-white">
+-                   点击上传产品图片
++                 <p className="mt-4 text-sm font-medium text-slate-600 dark:text-slate-400">
++                   添加关联场景图
+                  </p>
+-                 <p className="mt-2 text-sm leading-7 text-slate-400 dark:text-slate-500">
+-                   支持 JPG、PNG、WEBP。首张为产品主体图，后续为关联场景图
+-                   <br />
+-                   最多可上传 {MAX_FILES} 张，建议搭配不同场景图辅助 AI 分析
++                 <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
++                   最多 {MAX_ASSOCIATED_FILES} 张，帮助 AI 理解使用场景
+                  </p>
+-               </div>
++               </label>
+              )}
+-           </label>
+- 
+-           <div className="mt-6 flex justify-center">
+-             <Button
+-               onClick={handleStart}
+-               disabled={submitting || files.length === 0}
+-               className="min-w-[220px] rounded-full px-8"
+-             >
+-               {submitting ? (
+-                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+-               ) : (
+-                 <UploadCloud className="mr-2 h-4 w-4" />
+-               )}
+-               {submitting ? "正在上传并自动分析…" : "开始分析"}
+-             </Button>
+            </div>
++         </div>
++ 
++         {/* ====== 提交按钮 ====== */}
++         <div className="mt-8 flex flex-col items-center gap-3">
++           <Button
++             onClick={handleStart}
++             disabled={!canSubmit}
++             className="min-w-[220px] rounded-full px-8"
++           >
++             {submitting ? (
++               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
++             ) : (
++               <UploadCloud className="mr-2 h-4 w-4" />
++             )}
++             {submitting ? "正在上传并自动分析…" : "开始分析"}
++           </Button>
++ 
++           {!mainFile && (
++             <p className="text-xs text-slate-400 dark:text-slate-500">
++               请先上传产品主体图，关联图为可选
++             </p>
++           )}
++ 
++           {mainFile && associatedFiles.length > 0 && (
++             <p className="text-xs text-slate-400 dark:text-slate-500">
++               将上传 1 张主体图 + {associatedFiles.length} 张关联图
++             </p>
++           )}
+          </div>
+        </div>
+      </section>
+    );
+  }

@@ -1,0 +1,27 @@
+{
+  "name": "ximo-mall-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP (Model Context Protocol) server for Ximo Mall - AI-powered e-commerce image generation platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "start:stdio": "tsx src/index.ts",
+    "start:http": "tsx src/http.ts",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "^2.0.0-alpha.2",
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "node-fetch": "^3.3.2",
+    "zod": "^3.24.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.2",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
