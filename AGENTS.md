@@ -1,8 +1,17 @@
 # AGENTS.md — ximo-mall AI 维护规则文档
 
 > **项目**: ximo-mall — AI 电商详情页生成与编辑工作台
-> **技术栈**: Next.js 15.5.7 + React 18 + TypeScript + Prisma (SQLite) + Electron + Tailwind CSS
-> **最后更新**: 2026-06-21（第七轮升级：在第六轮高密度饱满基础上，将合格电商主图提炼为 **10 项硬约束 HC1-HC10**，写入 `lib/ai/prompts/planning.ts` 的 `HERO CONTENT TEMPLATE` 与 `buildZeroBlankAndLayerRule`，并通过 `hero-style-adaptations.ts` 的 `hardConstraintStyling` 让每种风格自由决定各硬约束的视觉表现形式；主图必须同时满足全部 10 项，副图至少覆盖 6 项且密度不低于主图 80%。风格差异只体现在 LOOK，不删减元素类别）
+> **技术栈**: Next.js 15.5 + React 18 + TypeScript + Prisma (SQLite) + Electron + Tailwind CSS
+> **最后更新**: 2026-06-22（v8 — 精简版，详见 git log）
+
+---
+
+## TL;DR（AI 维护者 30 秒速览）
+
+1. **定位目标功能** → 看下方「功能快速指南」表格，找到对应文件清单
+2. **改代码** → 只改目标功能涉及的文件，禁止顺手重构无关代码（铁律 1.1）
+3. **改完更新本文** → 按第 5 节清单逐项检查并更新本文
+4. **安全底线** → API Key 必须加密存储、禁止 SQL 拼接、禁止路径穿越、禁止 XSS
 
 ---
 
@@ -11,15 +20,8 @@
 1. [核心铁律](#1-核心铁律)
 2. [功能快速指南](#2-功能快速指南)
 3. [项目架构地图](#3-项目架构地图)
-4. [代码规范](#4-代码规范)
-5. [API 路由规范](#5-api-路由规范)
-6. [数据库规范](#6-数据库规范)
-7. [AI Provider 集成规范](#7-ai-provider-集成规范)
-8. [前端组件规范](#8-前端组件规范)
-9. [Electron 桌面端规范](#9-electron-桌面端规范)
-10. [MCP Server 规范](#10-mcp-server-规范)
-11. [文件存储规范](#11-文件存储规范)
-12. [维护后更新清单](#12-维护后更新清单)
+4. [代码规范速查](#4-代码规范速查)
+5. [维护后更新清单](#5-维护后更新清单)
 
 ---
 
@@ -44,11 +46,11 @@
 
 - 任何 AI 在开始维护前，**必须首先完整阅读本文件**。
 - 通过「功能快速指南」定位到目标功能，然后阅读对应章节了解该功能的文件清单和注意事项。
-- 如果本文件中某个功能的信息与实际代码不一致（例如文件路径变更、新增依赖），以实际代码为准，并在维护完成后按第 12 节主动更新本文件。
+- 如果本文件中某个功能的信息与实际代码不一致（例如文件路径变更、新增依赖），以实际代码为准，并在维护完成后按第 5 节主动更新本文件。
 
 ### 1.3 维护后必修 AGENTS.md
 
-- 每次完成维护任务后，AI **必须**检查并更新本文件（详见[第 12 节](#12-维护后更新清单)）。
+- 每次完成维护任务后，AI **必须**检查并更新本文件（详见[第 5 节](#5-维护后更新清单)）。
 - 如果新增了功能、添加了新文件、修改了模块职责、调整了数据流，必须同步更新「功能快速指南」和「架构地图」。
 - 如果发现本文件中存在过时信息，必须在本次维护中修正。
 
@@ -95,7 +97,7 @@
 
 | 项目 | 内容 |
 |------|------|
-| **功能描述** | 基于商品分析结果，AI 规划详情页各个模块（头图、卖点、场景、细节等）的文案和视觉方向。风格模板通过 `buildStyleInstruction()` 注入 7 维度视觉约束；头图（含主图与副图）通过 `buildHeroStyleAdaptation()` 注入 20 种风格的差异化构图/标题/营销/氛围/口味适配规则，并通过 `hardConstraintStyling` 定义各风格下 10 项硬约束的视觉表现形式。**所有风格现在统一执行高密度饱满标准 + 10 项硬约束**：主图必须同时出现 HC1 信息密度100%、HC2 双主体、HC3 三层标题、HC4 侧边卖点条、HC5 底部强对比横幅、HC6 角标徽章、HC7 食材配料、HC8 独立料包、HC9 强色彩分区、HC10 完整品牌信息；副图至少覆盖 6 项且密度 ≥ 主图 80%。风格差异体现在**布局方式、排版风格、配色方向、文案语气、道具类型、背景材质、营销元素形状**——而非删减元素数量或留白。`buildZeroBlankAndLayerRule` 与 `buildQualityFloor` 共同强制零大面积空白 |
+| **功能描述** | 基于商品分析结果，AI 规划详情页各模块的文案和视觉方向。支持 10 种模块类型。风格模板注入 7 维度视觉约束，头图通过风格适配实现 20 种差异化。所有风格统一执行高密度饱满标准 + 10 项硬约束，风格差异仅体现在视觉表现形式而非元素数量 |
 | **前端组件** | `components/planner/planner-workspace.tsx` |
 | **API 路由** | `app/api/projects/[id]/plan-sections/route.ts` `app/api/projects/[id]/sections/route.ts` `app/api/projects/[id]/sections/[sectionId]/route.ts` `app/api/projects/[id]/init-custom-sections/route.ts` |
 | **核心服务** | `lib/services/planner-service.ts` |
@@ -107,7 +109,7 @@
 
 | 项目 | 内容 |
 |------|------|
-| **功能描述** | AI 根据规划和文案生成详情页各模块的商品图片（头图、卖点图、场景图、细节图等）。风格模板通过 `buildStyleVisualConstraint()` 注入视觉约束；头图通过 `buildHeroStyleIdentity()` 执行风格身份覆盖。**`isLowDensityHeroStyle()` 已改为永远返回 false**——生成阶段不再有低密度/高密度两套条件分支，所有风格统一走高密度饱满路径（食物占65-75%+3-4个营销标签+20-25%营销覆盖+5-8个道具+零大面积留白），风格差异仅体现在材质/配色/字体/氛围/道具类型（由 `buildHeroStyleIdentity` 覆盖注入） |
+| **功能描述** | AI 根据规划和文案生成详情页各模块图片。所有风格统一走高密度饱满路径，风格差异仅体现在材质/配色/字体/氛围/道具类型。内置文字准确性规则减少错别字 |
 | **前端组件** | `components/editor/editor-workspace.tsx`（含生成触发） |
 | **API 路由** | `app/api/projects/[id]/sections/[sectionId]/route.ts`（含生成状态更新） |
 | **核心服务** | `lib/services/generation-service.ts` |
@@ -136,18 +138,30 @@
 
 | 项目 | 内容 |
 |------|------|
-| **功能描述** | AI Agent 对话式交互入口，基于 Mastra 框架，以 doubao-seed-2-0-lite-260428 为主控模型（支持视觉输入+深度思考）。调度 8 个专用工具（已移除 analyzeProductTool，由主控模型直接分析图片）。支持平台/风格/模式/张数/联网搜索选择器，自动模式执行 5 步流程（创建→搜索→规划→生成→汇报）。支持 heroCount=0 只生成详情页模式。支持图片超分高清放大（upscaleImageTool）。用户上传的图片通过 data URL → FileUIPart → experimental_attachments 管道传递给模型，实现直接视觉理解。模型深度思考链路（reasoning_content）通过 reasoning parts 展示在前端 |
+| **功能描述** | AI Agent 对话式交互入口，基于 Mastra 框架。调度 7 个专用工具，支持自动/问答两种模式。支持平台/风格/模式/张数/联网搜索选择器。模型深度思考链路实时展示在前端 |
 | **前端页面** | `app/ai-agent/page.tsx` |
-| **前端组件** | `components/ai-agent/ai-agent-workspace.tsx`（百度式居中输入框 + 对话气泡 + 工具调用展示 + 思考过程展示 + 三组选择器 + 联网搜索开关） |
-| **API 路由** | `app/api/ai-agent/chat/route.ts`（前端专用，UIMessageStream 格式） |
-| **外部 API** | `app/api/agent/chat/route.ts`（面向本地/内网外部应用，标准 SSE 格式，支持纯文本+图片输入，事件类型：text/tool_call/tool_result/reasoning/done/error） |
-| **连接器示例** | `examples/agent-connector.ts`（TypeScript/Node.js） `examples/agent-connector.py`（Python） |
+| **前端组件** | `components/ai-agent/ai-agent-workspace.tsx` |
+| **API 路由** | `app/api/ai-agent/chat/route.ts`（前端 UIMessageStream） |
+| **外部 API** | `app/api/agent/chat/route.ts`（标准 SSE，支持文本+图片，事件类型 text/tool_call/tool_result/reasoning/done/error） |
+| **连接器示例** | `examples/agent-connector.ts` `examples/agent-connector.py` |
 | **Mastra 入口** | `mastra/index.ts` |
-| **Agent 定义** | `mastra/agents/ximo-mall-agent.ts`（7 个工具 + 5 步自动流程 instructions，支持 heroCount=0 只生成详情页模式） |
-| **Mastra Tools** | `mastra/tools/create-project.ts`（独立 Prisma Tool，创建项目+上传图片+初始化模块+**写入 Agent 视觉分析结果和图片语义标签**，semanticType 对齐 AssetType 枚举：MAIN→MAIN, PACKAGING→PACKAGING, 其余→REFERENCE；**style/platform 优先从 requestContext 读取前端用户选择的英文 key，模型传入的值作为次选**，避免模型传中文 label 导致风格模板匹配失败） `mastra/tools/plan-sections.ts`（deepseek-v4-flash-260425，读取用户张数配置+资产标签，**支持 heroCount=0 只生成详情页**） `mastra/tools/generate-hero-image.ts`（wan2.7-image，支持 referenceSemanticTypes 参数按语义类型筛选参考图） `mastra/tools/generate-detail-image.ts`（wan2.7-image，支持 referenceSemanticTypes 参数） `mastra/tools/edit-image.ts`（wan2.7-image，整体重绘/增强，**支持 referenceSemanticTypes**） `mastra/tools/refine-image.ts`（wan2.7-image，定向微调/P图，**支持 referenceSemanticTypes**） `mastra/tools/web-search.ts`（百度 AI 搜索，单 API Key） |
-| **模型 Provider** | `mastra/model-provider.ts`（通过 `getProviderAdapter("agent")` 查找 doubao-seed-2-0-lite-260428 对应的 Provider，`provider-service.ts` 的 PURPOSE_MODELS 新增 `agent` 角色映射） |
-| **关联 Prompt** | `lib/ai/prompts/planning.ts` `lib/ai/prompts/generation.ts` `lib/ai/prompts/style-templates.ts` `lib/ai/prompts/hero-style-adaptations.ts`（Agent 自动模式同样复用这些 prompt 约束） |
+| **Agent 定义** | `mastra/agents/ximo-mall-agent.ts` |
+| **Mastra Tools** | 见下方子表 |
+| **模型 Provider** | `mastra/model-provider.ts` |
+| **关联 Prompt** | `lib/ai/prompts/planning.ts` `lib/ai/prompts/generation.ts` `lib/ai/prompts/style-templates.ts` `lib/ai/prompts/hero-style-adaptations.ts` |
 | **核心依赖** | `@mastra/core` `@mastra/ai-sdk` `@ai-sdk/openai-compatible` `@ai-sdk/react` `ai` |
+
+**Mastra Tools 明细：**
+
+| 工具 | 文件 | 模型 | 说明 |
+|------|------|------|------|
+| create-project | `mastra/tools/create-project.ts` | 主控模型 | 创建项目+上传图片+视觉分析+语义标签 |
+| plan-sections | `mastra/tools/plan-sections.ts` | deepseek-v4-flash | 文案规划，支持 heroCount=0 |
+| generate-hero-image | `mastra/tools/generate-hero-image.ts` | wan2.7-image | 头图生成，支持 referenceSemanticTypes |
+| generate-detail-image | `mastra/tools/generate-detail-image.ts` | wan2.7-image | 详情图生成，支持 referenceSemanticTypes |
+| edit-image | `mastra/tools/edit-image.ts` | wan2.7-image | 整体重绘/增强，支持 referenceSemanticTypes |
+| refine-image | `mastra/tools/refine-image.ts` | wan2.7-image | 定向微调/P图，支持 referenceSemanticTypes |
+| web-search | `mastra/tools/web-search.ts` | 百度 AI 搜索 | 联网搜索市场情报 |
 
 ### 2.8 Provider 管理（Providers）
 
@@ -222,16 +236,7 @@
 | **Embedding 模型** | 已禁用 |
 | **知识分类** | `KnowledgeCategory` 枚举：USAGE_SCENARIO / SELLING_POINT / SPECIFICATION / MATERIAL / TARGET_AUDIENCE / BRAND_INFO / OTHER |
 
-### 2.14b 面条品类知识库（Noodle Knowledge Base）⚠️ 已废弃
-
-| 项目 | 内容 |
-|------|------|
-| **状态** | **已废弃** — 前端入口已重定向到产品库。后端 API 和数据库模型保留但不再活跃使用 |
-| **前端页面** | `app/knowledge-base/page.tsx`（→ 重定向到 /product-library） |
-| **API 路由** | `app/api/knowledge-base/`（保留） |
-| **核心服务** | `lib/services/knowledge-base-service.ts` `lib/services/kb-training-service.ts` `lib/services/kb-summary-service.ts` |
-| **AI 提示词** | `lib/ai/prompts/kb-analysis.ts` |
-| **数据模型** | `prisma/schema.prisma` → `NoodleKnowledgeBase`, `NoodleKBImage`, `NoodleKBKnowledge` |
+### 2.14b 面条品类知识库 ⚠️ 已废弃 — 前端入口已重定向到产品库，后端 API 和数据库模型保留但不再活跃使用
 
 ### 2.15 API 用量监控（Monitor / API Usage）
 
@@ -289,82 +294,7 @@
 
 ## 3. 项目架构地图
 
-### 3.1 目录结构总览
-
-```
-ximo-mall/
-├── app/                          # Next.js App Router 页面和 API 路由
-│   ├── api/                      # API 路由（RESTful）
-│   │   ├── assets/               # 资产管理
-│   │   ├── files/                # 文件服务
-│   │   ├── image-tune/           # 图片精调
-│   │   ├── knowledge/            # 知识约束
-│   │   ├── knowledge-base/       # 面条品类知识库（已废弃）
-│   │   ├── learning/             # AI 学习系统
-│   │   ├── library/              # 图片库
-│   │   ├── mcp/                  # MCP 集成
-│   │   ├── monitor/              # 用量监控
-│   │   ├── product-library/      # 🆕 产品库
-│   │   ├── projects/             # 项目+分析+规划+生成+导出
-│   │   ├── providers/            # AI Provider 管理
-│   │   └── tasks/                # 任务管理
-│   └── ...                       # 前端页面路由
-├── components/                   # React 组件
-│   ├── analysis/                 # 商品分析工作台
-│   ├── ai-agent/                 # AI Agent
-│   ├── editor/                   # 编辑器工作台
-│   ├── export/                   # 导出面板
-│   ├── image-tune/               # 图片精调
-│   ├── layout/                   # 布局组件（AppShell, Theme, API Indicator）
-│   ├── mcp/                      # MCP 控制台
-│   ├── monitor/                  # 监控组件
-│   ├── planner/                  # 文案规划工作台
-│   ├── projects/                 # 项目创建/列表
-│   ├── providers/                # Provider 设置
-│   ├── shared/                   # 通用组件
-│   └── ui/                       # 基础 UI 组件（基于 Radix UI）
-├── hooks/                        # 自定义 React Hooks
-│   ├── use-editor-store.ts       # 编辑器状态（Zustand）
-│   └── use-toast.ts              # Toast 通知
-├── lib/                          # 核心业务逻辑
-│   ├── ai/                       # AI 集成层
-│   │   ├── adapters/             # AI Provider 适配器（OpenAI 兼容）
-│   │   ├── prompts/              # AI 提示词模板（含 style-templates.ts 风格模板、hero-style-adaptations.ts 主图风格差异化适配）
-│   │   ├── schemas/              # AI 输出 Zod Schema
-│   │   ├── capability-detector.ts # 模型能力检测
-│   │   ├── model-matcher.ts      # 模型角色匹配
-│   │   └── provider-client.ts    # 统一 AI 调用客户端
-│   ├── db/                       # 数据库
-│   │   └── prisma.ts             # Prisma 单例客户端
-│   ├── monitor/                  # API 用量监控
-│   ├── services/                 # 业务服务层（核心逻辑）
-│   ├── storage/                  # 文件存储层
-│   ├── utils/                    # 工具函数
-│   │   ├── api.ts                # API 响应格式工具
-│   │   ├── base64-upload.ts      # Base64 上传处理
-│   │   ├── content-language.ts   # 内容语言检测
-│   │   ├── crypto.ts             # 加密/解密工具
-│   │   ├── env.ts                # 环境变量安全读取
-│   │   ├── files.ts              # 文件操作工具
-│   │   ├── route.ts              # 路由处理工具（ok/fail/error）
-│   │   └── section.ts            # Section 工具函数
-│   └── validations/              # Zod 校验 Schema
-├── mcp-server/                   # 独立 MCP Server（外部 AI 集成）
-├── mastra/                       # Mastra AI Agent 框架（独立于项目常规能力）
-│   ├── agents/                   # Agent 定义
-│   ├── tools/                    # Agent 工具（7 个，独立封装）
-│   ├── index.ts                  # Mastra 入口
-│   └── model-provider.ts         # 动态 Provider 实例创建
-├── prisma/                       # Prisma Schema + 迁移文件
-├── scripts/                      # 构建/运行脚本
-├── types/                        # TypeScript 类型定义
-│   ├── domain.ts                 # 核心领域类型
-│   └── image-library.ts          # 图片库类型
-├── storage/                      # 运行时文件存储（生成图片、导出、上传等）
-└── desktop/                      # Electron 桌面应用
-```
-
-### 3.2 数据流架构
+### 3.1 数据流
 
 ```
 用户操作 → React 组件 → API Route → Service 层 → Prisma DB
@@ -376,266 +306,93 @@ ximo-mall/
                                             返回结果 → Service → DB → 响应
 ```
 
-### 3.3 关键依赖关系
+### 3.2 关键依赖关系
 
 - **API Route** → `lib/utils/route.ts`（`ok`, `fail`, `handleRouteError`）
-- **API Route** → `lib/utils/api.ts`（`apiSuccess`, `apiError`）
-- **Service** → `lib/db/prisma.ts`（Prisma 客户端单例）
-- **Service** → `lib/ai/provider-client.ts`（AI 调用）
-- **AI 调用** → `lib/ai/adapters/openai-compatible.ts`（适配器）
-- **AI 调用** → `lib/ai/capability-detector.ts`（能力检测）
-- **AI 调用** → `lib/ai/model-matcher.ts`（模型选择）
+- **Service** → `lib/db/prisma.ts`（Prisma 单例）→ `lib/ai/provider-client.ts`（AI 调用）
+- **AI 调用** → `lib/ai/adapters/openai-compatible.ts` → `lib/ai/capability-detector.ts` → `lib/ai/model-matcher.ts`
 - **Provider 管理** → `lib/utils/crypto.ts`（API Key 加解密）
-- **文件操作** → `lib/storage/asset-manager.ts`（资产管理）
-- **环境变量** → `lib/utils/env.ts`（安全读取）
+- **文件操作** → `lib/storage/asset-manager.ts`
+- **环境变量** → `lib/utils/env.ts`
+
+### 3.3 目录速查
+
+| 目录 | 用途 |
+|------|------|
+| `app/api/` | RESTful API 路由（按功能分子目录） |
+| `components/` | React 组件（按功能分子目录，`ui/` 为基础组件） |
+| `lib/ai/prompts/` | AI 提示词模板（planning/generation/style-templates/hero-style-adaptations） |
+| `lib/ai/schemas/` | AI 输出 Zod Schema |
+| `lib/services/` | 业务服务层 |
+| `lib/validations/` | Zod 校验 Schema |
+| `mastra/` | Mastra AI Agent 框架（agents + tools） |
+| `mcp-server/` | 独立 MCP Server |
+| `prisma/` | Prisma Schema + 迁移 |
+| `types/` | TypeScript 类型定义 |
+| `storage/` | 运行时文件存储（git 忽略） |
 
 ---
 
-## 4. 代码规范
+## 4. 代码规范速查
 
-### 4.1 TypeScript
+### 4.1 必须遵守
 
-- 所有新文件必须使用 TypeScript（`.ts` / `.tsx`）。
-- 禁止使用 `any`，除非有明确的注释说明原因。
-- 类型定义优先放在 `types/` 目录下，组件专用类型可放在组件文件内。
-- Zod Schema 用于运行时校验（API 输入/输出），TypeScript 类型用于编译时检查。两者必须保持同步。
+- **TypeScript 强制**：所有新文件 `.ts/.tsx`，禁止 `any`（除非注释说明）
+- **文件命名**：组件 `kebab-case.tsx`、Service `kebab-case.service.ts`、工具 `kebab-case.ts`、API 路由 `route.ts`
+- **导入**：使用 `@/` 别名，顺序：React/Next.js → 第三方 → 项目内部 → 类型。禁止循环依赖
+- **错误处理**：API 层用 `handleRouteError(error)`，Service 层向上抛出不静默吞错，前端用 `sonner` toast
+- **Zod 校验**：API 输入 → `lib/validations/`，AI 输出 → `lib/ai/schemas/`，失败返回 `VALIDATION_ERROR`
 
-### 4.2 文件命名
+### 4.2 API 路由
 
-| 类型 | 命名规范 | 示例 |
-|------|----------|------|
-| React 组件 | `kebab-case.tsx` | `editor-workspace.tsx` |
-| Service | `kebab-case.service.ts` | `project-service.ts` |
-| 工具函数 | `kebab-case.ts` | `crypto.ts` |
-| 类型定义 | `kebab-case.ts` | `domain.ts` |
-| API 路由 | `route.ts` | `app/api/projects/route.ts` |
+- 统一响应格式：`{ success: true, data }` / `{ success: false, error: { code, message } }`
+- 使用 `ok(data)` / `fail(code, message, details, status)` / `handleRouteError(error)`
+- RESTful 风格，资源名复数，复杂操作用动词子路由
 
-### 4.3 导入规范
+**错误码**：`VALIDATION_ERROR`(400) `NOT_FOUND`(404) `PROVIDER_AUTH_ERROR`(401) `SPENDING_LIMIT_REACHED`(403) `RATE_LIMITED`(429) `PROVIDER_TIMEOUT`(504) `INTERNAL_ERROR`(500)
 
-- 使用 `@/` 路径别名引用项目根目录下的文件。
-- 导入顺序：React/Next.js → 第三方库 → 项目内部模块 → 类型。
-- 禁止循环依赖。如果出现，使用 `import type` + 延迟加载或提取公共接口到独立文件。
+### 4.3 数据库
 
-### 4.4 错误处理
+- SQLite + Prisma，Schema 在 `prisma/schema.prisma`，迁移文件禁止手动修改
+- 所有 DB 操作通过 Service 层封装，API Route 不直接调 Prisma
+- 多表写入用 `prisma.$transaction`，改 Schema 后运行 `npm run prisma:migrate`
 
-- API 路由层统一使用 `lib/utils/route.ts` 的 `handleRouteError(error)` 处理错误。
-- 已内置 Provider 错误映射（额度用尽、限流、鉴权失败、超时等），新增 Provider 错误类型需在 `mapProviderError` 中添加。
-- Service 层错误应向上抛出，不要在 Service 内静默吞掉错误。
-- 前端使用 `sonner` toast 库展示错误信息。
+### 4.4 AI Provider
 
-### 4.5 Zod 校验规范
+- 适配器模式：`lib/ai/adapters/openai-compatible.ts`
+- 统一客户端 `lib/ai/provider-client.ts`：`structuredCall<T>()` / `textCall()`
+- 模型角色：`isDefaultAnalysis` / `isDefaultPlanning` / `isDefaultHeroImage` / `isDefaultDetailImage` / `isDefaultImageEdit`
+- API Key 必须 AES-256-GCM 加密（`lib/utils/crypto.ts`），禁止出现在日志/前端
 
-- 所有 API 路由的输入参数必须用 Zod Schema 校验（在 `lib/validations/` 目录下）。
-- AI 结构化输出必须用 Zod Schema 定义（在 `lib/ai/schemas/` 目录下）。
-- 校验失败统一返回 `VALIDATION_ERROR` 错误码。
+### 4.5 前端组件
 
----
+- `components/ui/` 基础 UI（Radix UI + Tailwind + CVA + `cn()`），必须支持 `className` prop
+- 状态管理：全局用 Zustand，页面级用 `useState`/`useReducer`
+- 所有组件必须支持亮色/暗色主题（`dark:` 变体）
 
-## 5. API 路由规范
+### 4.6 Electron 桌面端
 
-### 5.1 响应格式
+- 主进程 `desktop/main.cjs`，预加载 `desktop/preload.cjs`，Next.js 内置 Web 服务器
+- 构建：`npm run dist:win`（NSIS）/ `npm run dist:green`（免安装），输出 `dist-desktop/`
+- 使用 `better-sqlite3` 驱动，启动时自动执行 Prisma 迁移
 
-所有 API 响应使用统一格式（由 `lib/utils/api.ts` 定义）：
+### 4.7 MCP Server
 
-```typescript
-// 成功
-{ success: true, data: T }
+- 独立进程，stdio/HTTP 双传输，`mcp-server/src/server.ts` 定义 Tools
+- 新增 Tool 通过 `api-client.ts` 调用主应用 API，修改 API 路由时需同步检查 MCP Server
 
-// 失败
-{ success: false, error: { code: string, message: string, details?: unknown } }
-```
+### 4.8 文件存储
 
-### 5.2 路由处理
-
-- 使用 `ok(data)` 返回成功响应。
-- 使用 `fail(code, message, details, status)` 返回错误响应。
-- 捕获所有异常统一使用 `handleRouteError(error)`。
-
-### 5.3 错误码规范
-
-| 错误码 | HTTP 状态码 | 说明 |
-|--------|------------|------|
-| `VALIDATION_ERROR` | 400 | 请求参数校验失败 |
-| `NOT_FOUND` | 404 | 资源不存在 |
-| `PROVIDER_AUTH_ERROR` | 401 | Provider 鉴权失败 |
-| `SPENDING_LIMIT_REACHED` | 403 | API 额度用尽 |
-| `RATE_LIMITED` | 429 | 请求限流 |
-| `PROVIDER_TIMEOUT` | 504 | Provider 超时 |
-| `INTERNAL_ERROR` | 500 | 服务器内部错误 |
-
-### 5.4 路由结构原则
-
-- RESTful 风格：资源名复数，嵌套资源体现层级关系。
-- 每个 `route.ts` 文件只处理一个资源端点。
-- 复杂操作（analyze, export, train 等）使用动词命名子路由。
+- 所有运行时文件在 `storage/` 下：`generated/` `uploads/` `exports/` `library/` `knowledge-base/` `learning/` `monitor/`
+- 用 `asset-manager.ts` / `image-library-storage.ts` 操作，路径用 `path` 模块构建，删除前检查引用计数
 
 ---
 
-## 6. 数据库规范
-
-### 6.1 Prisma Schema
-
-- Schema 文件位于 `prisma/schema.prisma`。
-- 数据库使用 SQLite（`DATABASE_URL` 环境变量配置）。
-- 所有迁移文件位于 `prisma/migrations/`，禁止手动修改已有迁移文件。
-
-### 6.2 Model 命名
-
-| 前缀 | 用途 | 示例 |
-|------|------|------|
-| 无前缀 | 核心业务模型 | `Project`, `ProviderConfig` |
-| 动词前缀 | 关联/记录模型 | `AgentKnowledgeApply`, `KnowledgeApplyLog` |
-
-### 6.3 迁移规范
-
-- 修改 Schema 后运行 `npm run prisma:migrate`。
-- 新增迁移必须包含可回滚的考虑（在 commit message 中说明如何回滚）。
-- 严禁在迁移中直接写原生 SQL（Prisma Migrate 自动生成）。
-
-### 6.4 数据访问规范
-
-- 所有数据库操作通过 `lib/db/prisma.ts` 导出的单例 Prisma 客户端进行。
-- Service 层封装所有数据库操作，API Route 不应直接调用 Prisma。
-- 使用 Prisma 的事务（`prisma.$transaction`）处理多表写入。
-
----
-
-## 7. AI Provider 集成规范
-
-### 7.1 适配器模式
-
-- 所有 AI Provider 通过适配器模式接入（`lib/ai/adapters/`）。
-- 当前唯一适配器：`openai-compatible.ts`（兼容 OpenAI Chat Completions API）。
-- 新增 AI 平台支持时，在 `lib/ai/adapters/` 下创建新适配器，实现与 `OpenAICompatibleAdapter` 相同的接口。
-
-### 7.2 统一客户端
-
-- `lib/ai/provider-client.ts` 提供统一的 AI 调用接口：
-  - `structuredCall<T>(req)` — 结构化输出（带 Zod Schema 校验）
-  - `textCall(req)` — 纯文本输出
-- 所有 AI 调用必须通过此客户端，不得绕过直接调用 HTTP。
-
-### 7.3 模型角色分配
-
-- 每个模型可分配一个或多个角色（`isDefaultAnalysis`, `isDefaultPlanning`, `isDefaultHeroImage`, `isDefaultDetailImage`, `isDefaultImageEdit`）。
-- 同一角色可以有多个模型，系统按优先级选择。
-- 模型能力由 `capability-detector.ts` 自动检测（text, vision, image_gen, image_edit 等）。
-
-### 7.4 API Key 安全
-
-- API Key 必须使用 AES-256-GCM 加密存储（`lib/utils/crypto.ts`）。
-- 加密密钥来自环境变量，不得在代码中硬编码。
-- API Key 永远不应出现在日志、错误消息或前端响应中。
-
----
-
-## 8. 前端组件规范
-
-### 8.1 组件分类
-
-| 目录 | 用途 | 示例 |
-|------|------|------|
-| `components/ui/` | 基础 UI 组件（基于 Radix UI + Tailwind） | Button, Dialog, Select |
-| `components/shared/` | 跨功能共享组件 | PageHeader, ConfirmDialog |
-| `components/layout/` | 布局组件 | AppShell, ThemeToggle |
-| `components/<feature>/` | 功能专用组件 | analysis-workspace, editor-workspace |
-
-### 8.2 UI 组件规范
-
-- 所有基础 UI 组件在 `components/ui/` 目录下，基于 Radix UI 原语封装。
-- 使用 `class-variance-authority`（CVA）管理组件变体。
-- 使用 `tailwind-merge` + `clsx` 合并 className（`lib/utils.ts` 的 `cn` 函数）。
-- 组件必须支持 `className` prop 以允许外部样式覆盖。
-
-### 8.3 状态管理
-
-- 全局/跨组件状态使用 Zustand（当前仅有 `useEditorStore`）。
-- 页面级状态使用 React `useState` / `useReducer`。
-- 服务端状态通过 API 调用获取，不在前端缓存（除非有明确的性能需求）。
-
-### 8.4 主题
-
-- 支持亮色/暗色主题切换（`components/layout/theme-toggle.tsx` + `theme-script.tsx`）。
-- 使用 Tailwind 的 `dark:` 变体处理暗色模式样式。
-- 所有新组件必须同时支持亮色和暗色模式。
-
----
-
-## 9. Electron 桌面端规范
-
-### 9.1 架构
-
-- Electron 主进程：`desktop/main.cjs`
-- 预加载脚本：`desktop/preload.cjs`
-- Next.js 作为内置 Web 服务器，Electron 加载本地 URL。
-
-### 9.2 构建
-
-- 桌面端构建：`npm run build:desktop`
-- 打包分发：`npm run dist:win`（NSIS 安装包）
-- 打包绿色版：`npm run dist:green`（免安装目录）
-- 输出目录：`dist-desktop/`
-
-### 9.3 注意事项
-
-- 桌面端使用 `better-sqlite3` 作为 Prisma 的 SQLite 驱动（需在 `next.config.mjs` 中配置 `serverExternalPackages`）。
-- 数据库路径由 `scripts/runtime-paths.cjs` 动态解析。
-- 桌面端启动时自动执行 Prisma 迁移。
-
----
-
-## 10. MCP Server 规范
-
-### 10.1 架构
-
-- MCP Server 是独立进程，与 Next.js 主应用分离。
-- 通过 stdio 或 HTTP 与外部 AI 工具通信。
-- `mcp-server/src/server.ts` 定义 Tools 和 Resources。
-- `mcp-server/src/api-client.ts` 封装对 ximo-mall API 的调用。
-
-### 10.2 扩展 MCP Tools
-
-- 新增 MCP Tool 在 `mcp-server/src/server.ts` 中注册。
-- 每个 Tool 必须有明确的 `name`, `description`, `inputSchema`。
-- Tool 的实现通过 `api-client.ts` 调用主应用 API 路由。
-
-### 10.3 注意事项
-
-- MCP Server 有独立的 `package.json` 和依赖。
-- 修改 API 路由时需同步检查 MCP Server 是否受影响。
-
----
-
-## 11. 文件存储规范
-
-### 11.1 存储目录
-
-所有运行时文件存储在 `storage/` 目录下：
-
-| 子目录 | 用途 |
-|--------|------|
-| `storage/generated/` | AI 生成的图片 |
-| `storage/uploads/` | 用户上传的图片 |
-| `storage/exports/` | 导出的文件 |
-| `storage/library/` | 图片库资产（originals, thumbnails, converted） |
-| `storage/knowledge-base/` | 知识库训练图片 |
-| `storage/learning/` | AI 学习系统投喂图片 |
-| `storage/monitor/` | API 用量日志（api-usage.jsonl） |
-
-### 11.2 文件操作规范
-
-- 使用 `lib/storage/asset-manager.ts` 管理项目资产的文件操作。
-- 使用 `lib/storage/image-library-storage.ts` 管理图片库的文件操作。
-- 所有文件路径必须使用 `path` 模块构建，禁止字符串拼接。
-- 文件删除前必须检查数据库引用计数，防止孤立文件。
-
----
-
-## 12. 维护后更新清单
+## 5. 维护后更新清单
 
 > **每次完成维护任务后，AI 必须逐项检查并更新本文件。**
 
-### 12.1 必须检查的项目
+### 5.1 必须检查的项目
 
 | # | 检查项 | 操作 |
 |---|--------|------|
@@ -652,12 +409,12 @@ ximo-mall/
 | 11 | **修改了错误处理吗？** | 更新错误码规范表 |
 | 12 | **修改了存储路径吗？** | 更新文件存储规范 |
 
-### 12.2 更新格式
+### 5.2 更新格式
 
 - 在文件顶部的「最后更新」日期改为当天。
 - 如果改动较大，在 commit message 中写明 `docs: update AGENTS.md for <改动摘要>`。
 
-### 12.3 自检问题
+### 5.3 自检问题
 
 维护完成后，AI 应自问：
 
